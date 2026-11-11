@@ -107,3 +107,26 @@ describe("event helpers", () => {
     expect(detectRole("Boris Jabes", "Boris Jabes")).toBe("unknown");
   });
 });
+
+describe("find_events with the user's own events", () => {
+  const lumaHtml = `<html><head><title>c0mpiled-18 YC Startup School Hackathon Taipei · Luma</title></head><body>
+<h1>c0mpiled-18 Hackathon</h1><p>1st prize: Office Hours with YC Partner Boris Jabes + $3,000</p>
+<script id="__NEXT_DATA__">{"event":{"start_at":"2026-11-11T10:00:00.000Z","created_at":"2026-09-01T00:00:00Z"}}</script></body></html>`;
+
+  it("fetches a user event URL, finds the target in the prize text, and dates it from start_at", async () => {
+    const { fetch, calls } = fakeFetch((u) => (u.includes("luma.com/compiled") ? { text: lumaHtml } : { json: { results: [] } }));
+    const { ctx } = makeCtx(fetch);
+    const r = await find_events({ target, deadline, eventUrls: ["https://luma.com/compiled-poy7", "not a url"] }, ctx);
+    expect(calls.filter((c) => c.url.includes("luma.com/compiled"))).toHaveLength(1);
+    expect(r.events).toEqual([{ title: "c0mpiled-18 YC Startup School Hackathon Taipei · Luma", event_url: "https://luma.com/compiled-poy7",
+      event_date: "2026-11-11", role: "speaker", source: "user_event", role_detail: "office hours" }]);
+    expect(ctx.findings.byTool("find_events")[0]!.data).toMatchObject({ user_is_attending: true, role_detail: "office hours" });
+  });
+
+  it("drops a user event that does not name the target, and survives an unreachable page", async () => {
+    const { fetch } = fakeFetch((u) => (u.includes("other") ? { text: "<title>Other</title><p>No one here</p>" } : u.includes("down") ? { status: 500, text: "x" } : { json: { results: [] } }));
+    const { ctx } = makeCtx(fetch);
+    const r = await find_events({ target, deadline, eventUrls: ["https://luma.com/other", "https://luma.com/down"] }, ctx);
+    expect(r.events).toEqual([]);
+  });
+});

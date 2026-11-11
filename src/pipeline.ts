@@ -22,6 +22,7 @@ export interface ResearchInput {
   deadline: string;                 // YYYY-MM-DD
   offerInventory?: unknown[];       // from user_profile.json, passed through for Steps 3-5
   targetOverrides?: Partial<Target>; // e.g. known x_handle, to skip guessing
+  eventUrls?: string[];             // events the user attends (CLI --event-url / profile my_events)
 }
 
 /** Maps a tool to the "dimension" the Steps 3-5 code groups findings by. */
@@ -66,7 +67,7 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
   const [webMentions, xMentions, events, booking] = await Promise.all([
     runStep(ctx, "step2.recent_web_mentions", `Checking news about ${first} this week`, () => recent_web_mentions({ target }, ctx), summarizeRecentWebMentions),
     runStep(ctx, "step2.recent_x_mentions", `Checking X posts by and about ${first} this week`, () => recentXMentions({ target }, ctx), summarizeRecentXMentions),
-    runStep(ctx, "step2.find_events", `Finding events ${first} joins before ${input.deadline}`, () => find_events({ target, deadline: input.deadline }, ctx), summarizeFindEvents),
+    runStep(ctx, "step2.find_events", `Finding events ${first} joins before ${input.deadline}`, () => find_events({ target, deadline: input.deadline, eventUrls: input.eventUrls }, ctx), summarizeFindEvents),
     runStep(ctx, "step2.probe_booking_page", `Looking for ${first}'s booking page`, () => probe_booking_page({ target, bioLinks }, ctx), summarizeProbeBookingPage),
   ]);
 

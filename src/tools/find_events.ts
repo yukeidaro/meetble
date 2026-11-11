@@ -4,9 +4,9 @@ import { clip, dedupeByUrl, failedNote, fold, haystack, hostOf, mentionsName, na
 
 // Step 2: upcoming events the target hosts / speaks at, between now and deadline + GRACE_DAYS.
 
-export interface FindEventsInput { target: Target; deadline: string }
+export interface FindEventsInput { target: Target; deadline: string; /** Events the user is going to (e.g. their Luma registrations): checked for the target by fetching the page. */ eventUrls?: string[] }
 export type EventRole = "host" | "speaker" | "attendee" | "unknown";
-export interface FoundEvent { title: string; event_url: string; event_date?: string; role: EventRole }
+export interface FoundEvent { title: string; event_url: string; event_date?: string; role: EventRole; source?: "search" | "user_event"; role_detail?: string }
 export interface FindEventsResult { events: FoundEvent[]; window: { from: string; to: string }; failed_queries: number }
 
 export const EVENT_DOMAINS = ["lu.ma", "luma.com", "eventbrite.com"];
@@ -110,6 +110,38 @@ export function detectRole(text: string, name: string): EventRole {
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
+// Judges / office-hours partners are often named only in prize or "judges" sections (live run: tonight's
+// c0mpiled-18 hackathon lists "Office Hours with YC Partner Boris Jabes" as the 1st prize).
+const JUDGE_PRIORITY = [/\boffice hours\b/i, /\bjudg(e[sd]?|ing)\b/i, /\bjury\b/i, /\bmentors?\b/i];
+const JUDGE_WORDS = /\b(judge[sd]?|judging|jury|office hours|mentor[s]?|prize)\b/i;
+
+/** HTML → text, keeping inline JSON (Luma/Next.js put the description and start_at there). */
+export function htmlToText(html: string): { title?: string; text: string } {
+  const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, " ").trim();
+  const text = html
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/\\n/g, " ")
+    .replace(/\s+/g, " ");
+  return { title, text };
+}
+
+async function fetchUserEvent(url: string, ctx: ToolContext): Promise<ExaResult | undefined> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 10_000);
+  try {
+    const res = await ctx.fetch(url, { method: "GET", headers: { accept: "text/html", "user-agent": "Mozilla/5.0 (Meetble research)" }, signal: ac.signal });
+    if (!res.ok) return undefined;
+    const { title, text } = htmlToText(await res.text());
+    return { url, title: title ?? null, text };
+  } catch {
+    return undefined; // one unreachable page must not fail the step
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function find_events(input: FindEventsInput, ctx: ToolContext): Promise<FindEventsResult> {
   const name = input.target.name.trim();
   const dl = toIsoDate(input.deadline);
@@ -123,21 +155,28 @@ export async function find_events(input: FindEventsInput, ctx: ToolContext): Pro
   const { lists, failed } = await searchAll(
     [
       { query: `${name} event`, includeDomains: EVENT_DOMAINS, numResults: 10, text: { maxCharacters: 3000 } },
-      { query: `upcoming event featuring ${name}${input.target.company ? ` (${input.target.company})` : ""}: talk, fireside chat or panel`, numResults: 10, text: { maxCharacters: 3000 } },
+      { query: `upcoming event featuring ${name}${input.target.company ? ` (${input.target.company})` : ""}: talk, fireside chat, panel, hackathon judge or office hours`, numResults: 10, text: { maxCharacters: 3000 } },
     ],
     ctx,
   );
+  const userUrls = [...new Set((input.eventUrls ?? []).filter((u) => /^https?:\/\//i.test(u)))].slice(0, 5);
+  const userPages = (await Promise.all(userUrls.map((u) => fetchUserEvent(u, ctx)))).filter((x): x is ExaResult => !!x);
+  const userSet = new Set(userPages.map((p) => p.url));
 
   const events: FoundEvent[] = [];
-  for (const { r } of dedupeByUrl(lists)) {
+  for (const { r } of dedupeByUrl([userPages, ...lists])) {
+    const fromUser = userSet.has(r.url);
     const hay = haystack(r);
     if (!mentionsName(hay, name)) continue;
     const title = typeof r.title === "string" && r.title.trim() ? r.title.trim() : hostOf(r.url) || r.url;
     const onEventSite = EVENT_DOMAINS.some((d) => hostOf(r.url) === d || hostOf(r.url).endsWith(`.${d}`));
-    if (!onEventSite && !EVENT_WORDS.test(`${title}\n${hay.slice(0, 500)}`)) continue;
+    if (!fromUser && !onEventSite && !EVENT_WORDS.test(`${title}\n${hay.slice(0, 500)}`)) continue;
 
     // Event date: written dates (title first, then body). The page's publishedDate is when it was posted, not the event.
-    const dates = [...datesInText(title, now), ...datesInText(hay, now)];
+    // A fetched Luma page carries the real start in its JSON ("start_at"); trust that over loose dates in the page.
+    const startAt = fromUser ? hay.match(/"start_at"\s*:\s*"(\d{4}-\d{2}-\d{2}T[^"]+)"/)?.[1] : undefined;
+    const startDate = startAt && !Number.isNaN(Date.parse(startAt)) ? [new Date(Date.parse(startAt.slice(0, 10) + "T00:00:00Z"))] : [];
+    const dates = startDate.length ? startDate : [...datesInText(title, now), ...datesInText(hay, now)];
     const inWindow = dates.find((d) => d.getTime() >= from.getTime() && d.getTime() <= to.getTime());
     let event_date: string | undefined;
     if (inWindow) event_date = ymd(inWindow);
@@ -148,8 +187,16 @@ export async function find_events(input: FindEventsInput, ctx: ToolContext): Pro
       if (!onEventSite) continue;
       if (!pub || Date.parse(`${pub}T00:00:00Z`) < from.getTime() - UNDATED_MAX_AGE_DAYS * DAY) continue;
     }
-    const role = detectRole(hay, name);
-    events.push({ title, event_url: r.url, ...(event_date ? { event_date } : {}), role });
+    let role = detectRole(hay, name);
+    let role_detail: string | undefined;
+    if (role === "unknown" || role === "attendee") {
+      const i = fold(hay).indexOf(fold(name));
+      const near = i >= 0 ? hay.slice(Math.max(0, i - 120), i + name.length + 120) : "";
+      // Most specific word wins ("office hours" over the generic "prize" around it).
+      const m = JUDGE_PRIORITY.map((w) => near.match(w)).find(Boolean) ?? near.match(JUDGE_WORDS);
+      if (m) { role = "speaker"; role_detail = m[0].toLowerCase(); }
+    }
+    events.push({ title, event_url: r.url, ...(event_date ? { event_date } : {}), role, source: fromUser ? "user_event" : "search", ...(role_detail ? { role_detail } : {}) });
     ctx.findings.save({
       step: "step2",
       tool: "find_events",
@@ -158,7 +205,7 @@ export async function find_events(input: FindEventsInput, ctx: ToolContext): Pro
       source_url: r.url,
       ...(event_date ? { date: event_date } : {}),
       confidence: event_date && role !== "unknown" ? "high" : event_date ? "medium" : "low",
-      data: { event_url: r.url, ...(event_date ? { event_date } : {}), role },
+      data: { event_url: r.url, ...(event_date ? { event_date } : {}), role, ...(role_detail ? { role_detail } : {}), user_is_attending: fromUser },
     });
   }
   events.sort((a, b) => (a.event_date ?? "9999").localeCompare(b.event_date ?? "9999"));
