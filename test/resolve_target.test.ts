@@ -28,12 +28,20 @@ function route(url: string, body: any) {
 }
 
 describe("resolve_target", () => {
+  it("only puts the first clause of a long hint into the search text", async () => {
+    const { fetch, calls } = fakeFetch(route);
+    const { ctx } = makeCtx(fetch);
+    await resolve_target({ name: "Boris Jabes", hint: "YC partner; judge at c0mpiled-18 hackathon Taipei tonight" }, ctx);
+    expect(calls[0]!.body.query).toBe("Boris Jabes YC partner");
+  });
+
   it("sends people / X / personal-site searches and resolves the target", async () => {
     const { fetch, calls } = fakeFetch(route);
     const { ctx } = makeCtx(fetch);
     const r = await resolve_target({ name: "Boris Jabes", hint: "YC partner, Census co-founder" }, ctx);
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(4); // + bare-name people search, because a hint is given
     expect(calls.every((c) => c.url === "https://api.exa.ai/search")).toBe(true);
+    expect(calls[3]!.body).toMatchObject({ query: "Boris Jabes", category: "people" });
     const p = calls.find((c) => c.body.category === "people")!.body;
     expect(p.query).toBe("Boris Jabes YC partner, Census co-founder");
     expect(p.numResults).toBeLessThanOrEqual(10);

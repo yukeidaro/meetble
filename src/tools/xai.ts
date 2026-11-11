@@ -242,7 +242,7 @@ export async function xaiXSearch(p: XSearchParams, ctx: ToolContext): Promise<XS
     body: { model: XAI_MODEL, input: [{ role: "user", content: p.prompt }], tools: [tool], include: ["no_inline_citations"] },
     fetch: ctx.fetch,
     signal: ctx.signal,
-    timeoutMs: 120_000, // agentic search runs several tool calls server-side
+    timeoutMs: 240_000, // agentic search runs several tool calls server-side (120 s timed out 3 runs in a row live)
     retries: 1,             // 429/5xx/connection errors only
     retryOnTimeout: false,  // a timed-out agentic search already ran (and was billed) server-side
   });

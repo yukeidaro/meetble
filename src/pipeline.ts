@@ -41,6 +41,14 @@ export function dimensionOf(f: Finding): string {
   return DIMENSION[f.tool] ?? "web";
 }
 
+/** "Visiting Partner at Y Combinator" / "Partner @ Y Combinator" / "Partner, Y Combinator" → "Y Combinator". */
+export function companyFromRole(role?: string): string | undefined {
+  if (!role) return undefined;
+  const m = role.match(/(?:\bat\b|@|,)\s*([^|·•,()]+?)\s*(?:$|[|·•,(])/i);
+  const c = m?.[1]?.trim();
+  return c && c.length >= 2 && c.length <= 60 ? c : undefined;
+}
+
 export async function runResearch(input: ResearchInput, ctx: ToolContext) {
   const first = input.name.split(/\s+/)[0] ?? input.name;
 
@@ -65,7 +73,7 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
   }
 
   // STEP 1 (parallel)
-  const [web, pods, prec, xp, ig, email, li] = await Promise.all([
+  const [web, pods, prec, xp, ig, email0, li] = await Promise.all([
     runStep(ctx, "step1.search_web", `Reading ${first}'s bio, interviews and essays`, () => search_web({ target }, ctx), summarizeSearchWeb),
     runStep(ctx, "step1.podcast_quotes", `Finding ${first}'s podcasts and talks`, () => podcast_quotes({ target }, ctx), summarizePodcastQuotes),
     runStep(ctx, "step1.find_precedents", `Finding people who already reached ${first}`, () => find_precedents({ target }, ctx), summarizeFindPrecedents),
@@ -74,6 +82,18 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
     runStep(ctx, "step1.guess_work_email", `Estimating ${first}'s work email`, () => guess_work_email({ target }, ctx), summarizeGuessWorkEmail),
     runStep(ctx, "step1.linkedin_profile", `Opening ${first}'s LinkedIn in your Chrome`, () => linkedinProfile({ target }, ctx), summarizeLinkedInProfile),
   ]);
+
+  // LinkedIn (computer use) runs in parallel with the email guess, so a company it reads arrives too late.
+  // When the email step had no company, take it from LinkedIn's current role and run the email step again.
+  let email = email0;
+  const liCompany = companyFromRole(li?.data?.current_role) ?? companyFromRole(li?.data?.headline);
+  if (!target.company && liCompany) {
+    target.company = liCompany;
+    if (email0?.skipped || !email0?.email) {
+      email = await runStep(ctx, "step1.guess_work_email_retry", `Estimating ${first}'s work email (company from LinkedIn: ${liCompany})`,
+        () => guess_work_email({ target }, ctx), summarizeGuessWorkEmail) ?? email0;
+    }
+  }
 
   // STEP 2 (parallel)
   const bioLinks = [target.website, target.linkedin_url].filter((u): u is string => typeof u === "string");

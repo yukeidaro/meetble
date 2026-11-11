@@ -49,3 +49,14 @@ describe("runResearch end to end (all services faked)", () => {
     expect(r.target_id.name).toBeTruthy();
   }, 20000);
 });
+
+import { companyFromRole } from "../src/pipeline.js";
+describe("companyFromRole", () => {
+  it("reads the company from a LinkedIn role or headline", () => {
+    expect(companyFromRole("Visiting Partner at Y Combinator")).toBe("Y Combinator");
+    expect(companyFromRole("Partner @ Y Combinator | ex-Census")).toBe("Y Combinator");
+    expect(companyFromRole("Partner, Y Combinator")).toBe("Y Combinator");
+    expect(companyFromRole("Investor")).toBeUndefined();
+    expect(companyFromRole(undefined)).toBeUndefined();
+  });
+});

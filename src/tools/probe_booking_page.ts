@@ -47,6 +47,10 @@ export interface BookingPage {
   source: PageSource;
   /** true only when we saw the target's full name on the page (search text/title or probed HTML). */
   verified_name: boolean;
+  /** Calendly only: false when the profile is inactive or has no event types; undefined when we can't tell. */
+  live?: boolean;
+  event_types?: string[];
+  live_check?: "api" | "none";
 }
 
 export interface PaidPage {
@@ -333,6 +337,27 @@ export async function probe_booking_page(input: ProbeBookingInput, ctx: ToolCont
     }
   }
 
+  // Is the page actually in use? Calendly's public booking API says so; a page that only shows the name may be dead
+  // (live run: calendly.com/borisjabes exists, Yu says it is not used). Other platforms: unknown.
+  await Promise.all(pages.map(async (p) => {
+    const slug = p.platform === "calendly.com" ? new URL(p.url).pathname.split("/").filter(Boolean)[0] : undefined;
+    if (!slug) return;
+    const get = async (u: string) => {
+      try {
+        const res = await ctx.fetch(u, { method: "GET", headers: { accept: "application/json" }, signal: ctx.signal });
+        return res.status === 200 ? ((await res.json()) as unknown) : res.status === 404 ? null : undefined;
+      } catch { return undefined; }
+    };
+    const base = `https://calendly.com/api/booking/profiles/${encodeURIComponent(slug)}`;
+    const [prof, types] = await Promise.all([get(base), get(`${base}/event_types`)]);
+    if (prof !== null && !Array.isArray(types)) return; // not the API shape we know: unknown, not "dead"
+    p.live_check = "api";
+    const inactive = prof === null || !!(prof as { unavailability_reason?: unknown } | undefined)?.unavailability_reason;
+    const names = Array.isArray(types) ? types.map((t) => (t as { name?: unknown })?.name).filter((n): n is string => typeof n === "string") : [];
+    p.event_types = names;
+    p.live = !inactive && names.length > 0;
+  }));
+
   // findings
   for (const p of pages) {
     ctx.findings.save({
@@ -342,7 +367,7 @@ export async function probe_booking_page(input: ProbeBookingInput, ctx: ToolCont
       claim: `${target.name} has a public booking page on ${p.platform} (${sourceText(p.source)}).`,
       source_url: p.url,
       confidence: confidenceOf.get(p.url) ?? "low",
-      data: { platform: p.platform, source: p.source, verified_name: p.verified_name },
+      data: { platform: p.platform, source: p.source, verified_name: p.verified_name, ...(p.live_check ? { live: p.live, event_types: p.event_types, live_check: p.live_check } : {}) },
     });
   }
   for (const p of paid) {
@@ -380,7 +405,8 @@ export function summarizeProbeBookingPage(r: ProbeBookingResult): string {
   if (strong.length) {
     const p = strong[0]!;
     const from = p.source === "bio" ? "from bio" : p.source === "search" ? "from search" : "URL guess, name on page";
-    parts.push(`found ${shortUrl(p.url)} (${from})${strong.length > 1 ? ` +${strong.length - 1} more` : ""}`);
+    const state = p.live === false ? ", inactive" : p.live && p.event_types?.length ? `, ${p.event_types.length} event type${p.event_types.length > 1 ? "s" : ""}: ${p.event_types.slice(0, 2).join(", ")}; open slots unknown` : "";
+    parts.push(`found ${shortUrl(p.url)} (${from}${state})${strong.length > 1 ? ` +${strong.length - 1} more` : ""}`);
   } else if (r.pages.length) {
     parts.push(`no confirmed booking page; ${r.pages.length} unconfirmed hit${r.pages.length > 1 ? "s" : ""}`);
   } else {

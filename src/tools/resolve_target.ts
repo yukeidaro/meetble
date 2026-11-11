@@ -218,7 +218,9 @@ function hintTokens(hint?: string): string[] {
 export async function resolve_target(input: ResolveTargetInput, ctx: ToolContext): Promise<ResolveTargetResult> {
   const name = (input?.name ?? "").trim();
   if (!name) throw new Error("resolve_target: name is required");
-  const hint = input.hint?.trim() || undefined;
+  // Only the first clause of the hint goes into the search text: a long hint ("YC partner; judge at c0mpiled-18
+  // hackathon Taipei tonight") drifted Exa away from the profile pages, so the company was lost (live run).
+  const hint = input.hint?.split(/[;\n]/)[0]?.trim().split(/\s+/).slice(0, 6).join(" ") || undefined;
   const q = hint ? `${name} ${hint}` : name;
 
   const { lists, failed } = await searchAll(
@@ -227,6 +229,8 @@ export async function resolve_target(input: ResolveTargetInput, ctx: ToolContext
       { query: q, category: "people", numResults: 10, text: { maxCharacters: 1000 } },
       { query: `${q} X (Twitter) profile`, includeDomains: ["x.com", "twitter.com"], numResults: 5 },
       { query: q, category: "personal site", numResults: 5 },
+      // The bare name too, so profile pages (LinkedIn, Crunchbase) are found even when the hint misleads.
+      ...(hint ? [{ query: name, category: "people", numResults: 10, text: { maxCharacters: 1000 } }] : []),
     ],
     ctx,
   );
@@ -239,7 +243,7 @@ export async function resolve_target(input: ResolveTargetInput, ctx: ToolContext
   const cands: Cand[] = [];
   for (const { r, q: qi } of all) {
     const li = linkedinProfile(r.url);
-    if (qi !== 0 && !li) continue;
+    if (qi !== 0 && qi !== 3 && !li) continue;
     const p = parseProfileTitle(r.title);
     if (!p || !mentionsName(p.name, name)) continue;
     cands.push({ name: p.name, role: p.role, company: p.company, url: li?.url ?? r.url, r, slug: li?.slug, hint: matchesHint(r) });

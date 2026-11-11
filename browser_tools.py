@@ -2,7 +2,7 @@
 
 Setup (once):
   python3 -m venv .venv && source .venv/bin/activate
-  pip install 'browser-use[anthropic]'          # tested with browser-use 1.0.2
+  pip install 'browser-use[anthropic]'          # works with browser-use 0.13.x and 1.0.x
   export ANTHROPIC_API_KEY=sk-ant-...
   Chrome: open chrome://inspect/#remote-debugging, turn it on, click Allow when asked.
   Be logged in to luma.com and linkedin.com in that Chrome.
@@ -89,9 +89,16 @@ def run(task: str, schema):
         browser=Browser("chrome"),   # attaches to your open Chrome: your cookies, your logins
         output_model_schema=schema,
     )
-    history = agent.run_sync(max_steps=30, timeout=300)
-    out = history.structured_output
-    return out.model_dump() if out is not None else {"error": "no result", "final": history.final_result()}
+    # No timeout= here: browser-use 0.13.x (the newest on some feeds) rejects it. The Node caller kills us after 300 s.
+    history = agent.run_sync(max_steps=30)
+    out = getattr(history, "structured_output", None)  # not on every browser-use version
+    final = history.final_result()
+    if out is None and final:
+        try:
+            out = schema.model_validate_json(final)
+        except Exception:
+            out = None
+    return out.model_dump() if out is not None else {"error": "no result", "final": final}
 
 
 def login_check():

@@ -114,18 +114,18 @@ describe("probe_booking_page", () => {
       { target: boris, bioLinks: ["https://evilcalendly.com/boris", "https://calendly.com/borisj/30min", "https://x.com/borisjabes"] },
       ctx,
     );
-    expect(r.pages).toEqual([{ url: "https://calendly.com/borisj/30min", platform: "calendly.com", source: "bio", verified_name: false }]);
+    expect(r.pages.map(({ live: _l, event_types: _e, live_check: _c, ...p }) => p)).toEqual([{ url: "https://calendly.com/borisj/30min", platform: "calendly.com", source: "bio", verified_name: false }]);
     expect(r.probed).toEqual([]);
     const exa = calls.filter((c) => c.url === "https://api.exa.ai/search");
     expect(exa.length).toBe(2);
     expect(exa[0]!.body.includeDomains).toEqual([...BOOKING_DOMAINS]);
     expect(exa[0]!.body.query).toContain("Boris Jabes");
     expect(exa[1]!.body.includeDomains).toEqual([...PAID_DOMAINS]);
-    expect(calls.every((c) => c.url === "https://api.exa.ai/search")).toBe(true);
+    expect(calls.filter((c) => !c.url.includes("/api/booking/")).every((c) => c.url === "https://api.exa.ai/search")).toBe(true);
     const f = ctx.findings.all();
     expect(f.length).toBe(1);
     expect(f[0]).toMatchObject({ kind: "booking_page", confidence: "high", source_url: "https://calendly.com/borisj/30min", step: "step2" });
-    expect(summarizeProbeBookingPage(r)).toBe("found calendly.com/borisj/30min (from bio)");
+    expect(summarizeProbeBookingPage(r)).toBe("found calendly.com/borisj/30min (from bio, inactive)");
   });
 
   it("search hits are kept only when they name the target; paid pages are their own kind", async () => {
@@ -161,12 +161,12 @@ describe("probe_booking_page", () => {
     const { ctx } = makeCtx(fetch);
     const r = await probe_booking_page({ target: boris }, ctx);
     expect(r.probed).toEqual(["https://calendly.com/boris-jabes", "https://calendly.com/borisjabes"]);
-    expect(r.pages).toEqual([{ url: "https://calendly.com/borisjabes", platform: "calendly.com", source: "probe", verified_name: true }]);
+    expect(r.pages.map(({ live: _l, event_types: _e, live_check: _c, ...p }) => p)).toEqual([{ url: "https://calendly.com/borisjabes", platform: "calendly.com", source: "probe", verified_name: true }]);
     const probeCall = calls.find((c) => c.url === "https://calendly.com/borisjabes")!;
     expect(probeCall.init?.method).toBe("GET");
     expect(probeCall.init?.signal).toBeInstanceOf(AbortSignal);
     expect(ctx.findings.all()[0]).toMatchObject({ kind: "booking_page", confidence: "medium" });
-    expect(summarizeProbeBookingPage(r)).toBe("found calendly.com/borisjabes (URL guess, name on page)");
+    expect(summarizeProbeBookingPage(r)).toBe("found calendly.com/borisjabes (URL guess, name on page, inactive)");
   });
 
   it("caps probes at 5 and swallows network errors", async () => {
@@ -189,7 +189,7 @@ describe("probe_booking_page", () => {
     });
     const { ctx } = makeCtx(fetch);
     const r = await probe_booking_page({ target: boris }, ctx);
-    expect(r.pages).toEqual([{ url: "https://calendly.com/boris-jabes", platform: "calendly.com", source: "probe", verified_name: true }]);
+    expect(r.pages.map(({ live: _l, event_types: _e, live_check: _c, ...p }) => p)).toEqual([{ url: "https://calendly.com/boris-jabes", platform: "calendly.com", source: "probe", verified_name: true }]);
     expect(ctx.findings.all()[0]!.confidence).toBe("medium");
   });
 
@@ -223,5 +223,29 @@ describe("probe_booking_page", () => {
     const r3 = await probe_booking_page({ target: boris }, down.ctx);
     expect(r3.errors).toEqual(["exa-mcp error 503", "exa-mcp error 503"]);
     expect(r3.probed.length).toBe(5);
+  });
+});
+
+describe("calendly live check", () => {
+  const route = (inactive: boolean) => (u: string) => {
+    if (u.includes("/api/booking/profiles/borisjabes/event_types")) return { json: inactive ? [] : [{ name: "Personal", slug: "personal" }] };
+    if (u.includes("/api/booking/profiles/borisjabes")) return { json: { name: "Boris Jabes", unavailability_reason: inactive ? { code: "profile_no_active" } : null } };
+    if (u === "https://calendly.com/borisjabes") return { text: "<title>Boris Jabes</title>" };
+    if (u.includes("calendly.com")) return { status: 404, text: "" };
+    return { json: { results: [] } };
+  };
+  it("marks an active profile with its event types", async () => {
+    const { fetch } = fakeFetch(route(false));
+    const { ctx } = makeCtx(fetch);
+    const r = await probe_booking_page({ target: { name: "Boris Jabes" } }, ctx);
+    expect(r.pages[0]).toMatchObject({ url: "https://calendly.com/borisjabes", live: true, event_types: ["Personal"], live_check: "api" });
+    expect(summarizeProbeBookingPage(r)).toContain("1 event type: Personal; open slots unknown");
+  });
+  it("marks profile_no_active as not live", async () => {
+    const { fetch } = fakeFetch(route(true));
+    const { ctx } = makeCtx(fetch);
+    const r = await probe_booking_page({ target: { name: "Boris Jabes" } }, ctx);
+    expect(r.pages[0]).toMatchObject({ live: false, live_check: "api" });
+    expect(summarizeProbeBookingPage(r)).toContain("inactive");
   });
 });
