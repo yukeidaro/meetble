@@ -85,7 +85,11 @@ async function waitForLogin(c: LoginCheckResult): Promise<boolean> {
   return !skipLogin;
 }
 let skipLogin = false;
-const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls, waitForLogin }, ctx);
+const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls, waitForLogin,
+  // One line per live action card; server.mjs forwards each to the UI the moment it appears.
+  onAction: (a) => console.log(`ACTION ${JSON.stringify(a)}`) }, ctx);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify({ ...result, events_log: events }, null, 2), "utf8");
-console.log(`\n${result.findings.length} findings saved to ${out}`);
+console.log(`\n${result.findings.length} findings, ${result.live_actions.length} live actions in ${result.timing.elapsed_s} s, saved to ${out}`);
+// A step cut off by the time budget may still have a child process (browser-use) or socket open; don't wait for it.
+process.exit(0);

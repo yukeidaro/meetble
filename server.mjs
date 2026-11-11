@@ -164,6 +164,7 @@ function toUiAction(a) {
   const acct = /linkedin\.com/i.test(url) ? "linkedin" : /(^|\/\/|\.)x\.com|twitter\.com/i.test(url) ? "x" : /lu\.ma|luma\.com/i.test(url) ? "luma" : null;
   const r = a.reasons || {};
   const whyDo = [r.m_relevance, r.m_warmth, r.m_timing, r.m_channel, r.base_rate].filter(Boolean).slice(0, 4);
+  if (a.provisional) whyDo.unshift("Found live during research; re-ranked when research ends");
   whyDo.push(`¥${Number(a.cost_jpy || 0).toLocaleString()} · ${a.hours}h of your time · ${a.days_to_outcome} day(s) to a result`);
   const inTotal = a.in_total ?? (a.fits_deadline !== false && a.fits_budget !== false);
   return {
@@ -183,7 +184,7 @@ function startJob(body) {
   if (job && !job.done) stopJob();
   const ask = parseAsk(body.ask);
   if (body.name) ask.name = String(body.name).trim();
-  const j = { id: Date.now().toString(36), events: [], clients: new Set(), done: false, child: null, ask };
+  const j = { id: Date.now().toString(36), events: [], clients: new Set(), done: false, child: null, ask, live: [] };
   job = j;
   const push = (ev) => { if (job !== j) return; j.events.push(ev); for (const c of j.clients) c.write(`data: ${JSON.stringify(ev)}\n\n`); };
   j.push = push;
@@ -224,6 +225,10 @@ function stepHandler(j, groupFor) {
       j.push({ type: "step", id: "si" + sid(t), group: G[0], label: "Sign in needed in your Chrome", status: "locked", note: t });
       return;
     }
+    if (line.startsWith("ACTION ")) { // a live action card from research (src/leads.ts): show it now, Step 5 re-ranks later
+      try { const a = JSON.parse(line.slice(7)); j.live.push(a); j.push({ type: "action", action: toUiAction(a) }); } catch {}
+      return;
+    }
     const s = parseLine(line);
     if (!s) { if (line.trim()) j.push({ type: "log", text: line.trim() }); return; }
     if (s.step === "5" && /^\s*[\d.<>]+%/.test(s.label)) return; // per-action lines: the deck shows these
@@ -259,6 +264,13 @@ async function run(j, body) {
   const t = research.target_id || {};
   push({ type: "meta", name: t.name || ask.name, role: [t.role, t.company].filter(Boolean).join(" · ") });
   for (const ev of findingEvents(research)) push(ev);
+  if (reuse) for (const a of research.live_actions || []) { j.live.push(a); push({ type: "action", action: toUiAction(a) }); }
+  // If Steps 3-5 fail, the live cards found during research are still a usable plan (root cause #4: one big final call).
+  const fallback = (why) => {
+    if (!j.live.length) throw new Error(why);
+    push({ type: "step", id: "s5fallback", group: G[5], label: "Ranking didn't finish; showing the actions found during research", status: "none", note: why.slice(0, 160) });
+    push({ type: "actions", actions: j.live.map(toUiAction), p_total: null, summary: "" });
+  };
 
   // Steps 3-5
   research.goal = { ...(research.goal || {}), meet: ask.meet, ...(ask.budget_jpy ? { budget_jpy: ask.budget_jpy } : {}) };
@@ -269,12 +281,15 @@ async function run(j, body) {
   const r = await runProc(j, PY, pargs, { PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }, stepHandler(j, () => G[5]));
   if (j.done) return;
   const planText = mtime() > before ? readFileSync(PLAN, "utf8") : null;
-  if (!planText) throw new Error(`Planning failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no plan written"}`);
+  if (!planText) return fallback(`Planning failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no plan written"}`);
   const plan = JSON.parse(planText.replace(/^﻿/, ""));
   if (plan.persona) push({ type: "finding", section: "persona", label: "Summary", claim: plan.persona, via: "Meetble" });
-  const actions = (plan.actions || []).map(toUiAction);
-  push({ type: "actions", actions, p_total: plan.p_total, summary: plan.plan_summary || "" });
-  if (!actions.length) throw new Error("No actions came back from Step 5");
+  const ranked = plan.actions || [];
+  if (!ranked.length) return fallback("No actions came back from Step 5");
+  // Keep live cards Step 5 didn't cover (same type and link), so a path found during research never disappears.
+  const covered = new Set(ranked.map((a) => `${a.type}|${a.channel_url || ""}`));
+  const extra = j.live.filter((a) => !covered.has(`${a.type}|${a.channel_url || ""}`));
+  push({ type: "actions", actions: [...ranked, ...extra].map(toUiAction), p_total: plan.p_total, summary: plan.plan_summary || "" });
 }
 
 // ---------- sign-ins: read your Chrome's session cookies over CDP (no agent, no tab opened, answers in under a second) ----------

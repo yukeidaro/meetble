@@ -1087,7 +1087,7 @@ function emit(ev){
   log.push(ev);
   $('#evlog').textContent = log.slice(-60).map(e => JSON.stringify(e)).join('\n');
   $('#evlog').scrollTop = 1e6;
-  ({step:onStep, finding:onFinding, actions:onActions, action_status:onStatus, browse:onBrowse})[ev.type]?.(ev);
+  ({step:onStep, finding:onFinding, action:onLiveAction, actions:onActions, action_status:onStatus, browse:onBrowse})[ev.type]?.(ev);
 }
 
 const ICON = {
@@ -1180,6 +1180,18 @@ function onActions(ev){
   cur = 0; dir = 'r';
   $('#tabPlan').disabled = false; $('#planCnt').textContent = actions.length;
   renderFilters(); renderActs(); showTab(true);
+}
+// A live card: research just found a path to the person. It joins the deck now; the final "actions" list re-ranks and replaces the deck.
+function onLiveAction(ev){
+  const a = ev.action;
+  if(!a || actions.some(x => x.id === a.id)) return;
+  const shown = vis()[cur];
+  actions.push(a);
+  actions.sort((x,y) => pOf(y) - pOf(x));
+  if(shown) cur = Math.max(0, vis().indexOf(shown)); // keep the card the person is looking at in front
+  $('#tabPlan').disabled = false; $('#planCnt').textContent = actions.length;
+  if(actions.length === 1) renderFilters();
+  renderActs();
 }
 function renderFilters(){
   $('#filters').innerHTML = [['all','All'], ...Object.entries(OUT)].map(([k,v]) =>

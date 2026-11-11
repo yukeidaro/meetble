@@ -1,0 +1,77 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { runResearch } from "../src/pipeline.js";
+import { RunBudget, withTimeout, OverBudget } from "../src/core/budget.js";
+import { actionsFromFinding, LiveActions, type LiveAction } from "../src/leads.js";
+import { FindingStore } from "../src/core/findings.js";
+import { resetExaMcpSession } from "../src/tools/exa_mcp.js";
+import { fakeFetch, makeCtx } from "./helpers.js";
+
+beforeEach(() => resetExaMcpSession());
+
+describe("time budget", () => {
+  it("withTimeout gives up on a stalled call and reports it as skipped", async () => {
+    await expect(withTimeout(() => new Promise(() => {}), 20)).rejects.toBeInstanceOf(OverBudget);
+    await expect(withTimeout(async () => 7, 1000)).resolves.toBe(7);
+  });
+  it("never gives a step more than what is left of the run", () => {
+    let t = 0;
+    const b = new RunBudget(10_000, () => t);
+    t = 8_000;
+    expect(b.capFor(60_000)).toBe(2_000);
+    expect(b.capFor(500)).toBe(500);
+  });
+  it("a hung xAI call no longer holds the run: it finishes inside the budget with X marked skipped", async () => {
+    const exa = [{ url: "https://www.linkedin.com/in/borisjabes", title: "Boris Jabes - Partner - Y Combinator | LinkedIn", text: "Boris Jabes is a Partner at Y Combinator." },
+      { url: "https://x.com/borisjabes", title: "Boris Jabes (@borisjabes) / X", text: "Partner at YC" }];
+    const { fetch } = fakeFetch((url) => {
+      if (url.startsWith("https://api.x.ai")) return new Promise(() => {}); // never answers
+      if (url.startsWith("https://api.exa.ai")) return { json: { results: exa } };
+      return { status: 404, text: "" };
+    });
+    const { ctx, events } = makeCtx(fetch);
+    const t0 = Date.now();
+    const r = await runResearch({ name: "Boris Jabes", deadline: "2026-11-20", budget: new RunBudget(1_500) }, ctx);
+    expect(Date.now() - t0).toBeLessThan(5_000);
+    expect(events.filter((e) => e.id === "step1.x_profile").at(-1)?.note).toMatch(/time budget/);
+    const ids = new Set(events.map((e) => e.id));
+    for (const id of ids) expect(events.filter((e) => e.id === id).at(-1)?.status).not.toBe("running");
+    expect(r.timing.budget_s).toBe(2);
+  }, 10_000);
+});
+
+describe("live action cards", () => {
+  const f = (kind: string, data: Record<string, unknown> = {}, claim = "c") =>
+    ({ id: "f1", step: "step1" as const, tool: "t", kind, claim, source_url: "https://example.com/p", confidence: "high" as const, data });
+
+  it("turns paths into actions and ignores plain facts", () => {
+    expect(actionsFromFinding(f("bio"), "Boris Jabes")).toHaveLength(0);
+    const m = actionsFromFinding(f("mutuals", { mutual_connections: ["Ann Lee", "Bo Chen", "Cy Wu", "Di Ng"] }), "Boris Jabes");
+    expect(m.map((a) => a.title)).toEqual(["Ask Ann Lee for an intro to Boris", "Ask Bo Chen for an intro to Boris", "Ask Cy Wu for an intro to Boris"]);
+    expect(m[0].type).toBe("referral");
+    expect(actionsFromFinding(f("inner_circle", { handle: "gdb", count: 4 }), "Boris Jabes")[0].channel_url).toBe("https://x.com/gdb");
+    expect(actionsFromFinding(f("booking_page"), "Boris Jabes")[0].type).toBe("booking_page");
+  });
+
+  it("emits each card the moment its finding is saved, deduped and capped", () => {
+    const store = new FindingStore();
+    const got: LiveAction[] = [];
+    const live = new LiveActions(() => "Boris Jabes", (a) => got.push(a));
+    store.onSave((x) => live.consider(x));
+    for (let i = 0; i < 5; i++) store.save({ step: "step1", tool: "x_profile", kind: "post", claim: `post ${i}`, source_url: `https://x.com/b/status/${i}`, confidence: "high" });
+    expect(got).toHaveLength(2); // posts capped at 2
+    store.save({ step: "step2", tool: "probe_booking_page", kind: "booking_page", claim: "cal", source_url: "https://cal.com/b", confidence: "high" });
+    expect(got.at(-1)?.type).toBe("booking_page");
+    expect(got.every((a) => a.provisional && /^live\d+$/.test(a.id))).toBe(true);
+  });
+
+  it("runResearch streams actions before it returns", async () => {
+    const { fetch } = fakeFetch((url) => {
+      if (url.startsWith("https://api.exa.ai")) return { json: { results: [{ url: "https://calendly.com/borisjabes", title: "Boris Jabes | Calendly", text: "Boris Jabes. Book a 30 minute meeting." }] } };
+      return { status: 404, text: "" };
+    });
+    const { ctx } = makeCtx(fetch);
+    const seen: LiveAction[] = [];
+    const r = await runResearch({ name: "Boris Jabes", deadline: "2026-11-20", onAction: (a) => seen.push(a) }, ctx);
+    expect(seen.length).toBe(r.live_actions.length);
+  }, 20_000);
+});

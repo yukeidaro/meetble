@@ -1,5 +1,6 @@
 // Steps 0-2 of Meetble: resolve who, research what they want, find what they're doing now.
-// Every tool runs inside runStep, so one failure becomes a ❌/⏭️ checklist line and never stops the run.
+// Every tool runs inside runStep under a time budget, so one failure or stall becomes a ❌/⏭️ checklist line
+// and never stops the run.
 import { runStep } from "./core/step.js";
 import type { Finding, Target, ToolContext } from "./core/types.js";
 import { resolve_target, summarizeResolveTarget } from "./tools/resolve_target.js";
@@ -16,6 +17,8 @@ import { recentXMentions, summarizeRecentXMentions } from "./tools/recent_x_ment
 import { find_events, summarizeFindEvents } from "./tools/find_events.js";
 import { loginCheck, lumaMyEvents, summarizeLoginCheck, summarizeLumaMyEvents, type LoginCheckResult } from "./tools/browser_session.js";
 import { probe_booking_page, summarizeProbeBookingPage } from "./tools/probe_booking_page.js";
+import { RunBudget, withTimeout } from "./core/budget.js";
+import { LiveActions, type LiveAction } from "./leads.js";
 
 export interface ResearchInput {
   name: string;
@@ -26,6 +29,10 @@ export interface ResearchInput {
   eventUrls?: string[];             // events the user attends (CLI --event-url / profile my_events)
   /** Called when the pre-flight check finds sites signed out: ask the human to log in, resolve true to re-check. */
   waitForLogin?: (check: LoginCheckResult) => Promise<boolean>;
+  /** Called as soon as a finding opens a path to the person (a live, provisional action card). */
+  onAction?: (a: LiveAction) => void;
+  /** Run-wide time budget (default MEETBLE_BUDGET_S, 300 s). */
+  budget?: RunBudget;
 }
 
 /** Maps a tool to the "dimension" the Steps 3-5 code groups findings by. */
@@ -49,59 +56,91 @@ export function companyFromRole(role?: string): string | undefined {
   return c && c.length >= 2 && c.length <= 60 ? c : undefined;
 }
 
+/** Per-step caps (ms). The run-wide budget can cut them shorter; see core/budget.ts. */
+export const STEP_CAP_MS: Record<string, number> = {
+  login_check: 180_000, luma_my_events: 150_000, resolve_target: 60_000, find_x_handle: 60_000,
+  search_web: 90_000, podcast_quotes: 90_000, find_precedents: 90_000, x_profile: 150_000, instagram_public: 90_000,
+  guess_work_email: 90_000, linkedin_profile: 180_000, recent_web_mentions: 60_000, recent_x_mentions: 120_000,
+  find_events: 120_000, probe_booking_page: 60_000,
+};
+
+export function runBudgetMs(env: NodeJS.ProcessEnv = process.env): number {
+  const s = Number(env.MEETBLE_BUDGET_S);
+  return (Number.isFinite(s) && s >= 30 ? s : 300) * 1000;
+}
+
+/**
+ * Steps 0-2 as one dependency graph instead of three gated stages (root cause #1 in the redesign doc):
+ * every tool starts as soon as what it needs is known, so the slowest tool no longer holds back the rest.
+ *  - The sign-in check runs in the background; only the Luma event lookup waits for it.
+ *  - X tools wait for the X handle; find_events waits for your Luma events; the email guess waits for the company.
+ *  - Everything else starts right after the person is identified.
+ * Every step also runs under the run-wide time budget, and findings that open a path to the person become
+ * live action cards immediately (input.onAction) instead of waiting for Step 5.
+ */
 export async function runResearch(input: ResearchInput, ctx: ToolContext) {
   const first = input.name.split(/\s+/)[0] ?? input.name;
+  const budget = input.budget ?? new RunBudget(runBudgetMs());
+  const step = <T>(id: string, label: string, fn: () => Promise<T>, summarize: (r: T) => string) => {
+    const tool = id.replace(/^step\d\./, "").replace(/_recheck$/, "");
+    return runStep(ctx, id, label, () => withTimeout(fn, budget.capFor(STEP_CAP_MS[tool] ?? 90_000)), summarize);
+  };
 
-  // STEP 0: pre-flight. Research signed in wherever possible; the human logs in themselves (never a password from us).
-  let login = await runStep(ctx, "step0.login_check", "Checking you're signed in to Luma, LinkedIn, X and Instagram", () => loginCheck({}, ctx), summarizeLoginCheck);
-  if (login && !login.skipped && (login.signed_out?.length || login.account_mismatch) && input.waitForLogin && (await input.waitForLogin(login))) {
-    login = await runStep(ctx, "step0.login_recheck", "Re-checking sign-ins", () => loginCheck({}, ctx), summarizeLoginCheck);
-  }
-  const lumaOn = login?.sites?.luma?.logged_in === true;
-  const mine = lumaOn
-    ? await runStep(ctx, "step0.luma_my_events", "Reading your upcoming Luma events", () => lumaMyEvents({}, ctx), summarizeLumaMyEvents)
-    : undefined;
-  const eventUrls = [...(input.eventUrls ?? []), ...(mine?.events ?? []).map((e) => e.url)];
+  let targetName = input.name;
+  const live = new LiveActions(() => targetName, (a) => input.onAction?.(a));
+  ctx.findings.onSave((f) => live.consider(f));
 
-  const resolved = await runStep(ctx, "step0.resolve_target", `Identifying ${input.name}`,
+  // STEP 0, in the background: sign-in check, then your Luma events.
+  const loginP = (async () => {
+    let login = await step("step0.login_check", "Checking you're signed in to Luma, LinkedIn, X and Instagram", () => loginCheck({}, ctx), summarizeLoginCheck);
+    if (login && !login.skipped && (login.signed_out?.length || login.account_mismatch) && input.waitForLogin && (await input.waitForLogin(login))) {
+      login = await step("step0.login_recheck", "Re-checking sign-ins", () => loginCheck({}, ctx), summarizeLoginCheck);
+    }
+    return login;
+  })();
+  const mineP = loginP.then((login) => login?.sites?.luma?.logged_in === true
+    ? step("step0.luma_my_events", "Reading your upcoming Luma events", () => lumaMyEvents({}, ctx), summarizeLumaMyEvents)
+    : undefined);
+
+  const resolved = await step("step0.resolve_target", `Identifying ${input.name}`,
     () => resolve_target({ name: input.name, hint: input.hint }, ctx), summarizeResolveTarget);
   const target: Target = { ...(resolved?.target ?? { name: input.name }), ...stripUndefined(input.targetOverrides ?? {}) };
-  if (!target.x_handle) {
-    const xh = await runStep(ctx, "step0.find_x_handle", `Finding ${input.name}'s X account`,
-      () => findXHandle({ target }, ctx), summarizeFindXHandle);
-    if (xh?.handle) target.x_handle = xh.handle;
-  }
+  targetName = target.name || input.name;
 
-  // STEP 1 (parallel)
-  const [web, pods, prec, xp, ig, email0, li] = await Promise.all([
-    runStep(ctx, "step1.search_web", `Reading ${first}'s bio, interviews and essays`, () => search_web({ target }, ctx), summarizeSearchWeb),
-    runStep(ctx, "step1.podcast_quotes", `Finding ${first}'s podcasts and talks`, () => podcast_quotes({ target }, ctx), summarizePodcastQuotes),
-    runStep(ctx, "step1.find_precedents", `Finding people who already reached ${first}`, () => find_precedents({ target }, ctx), summarizeFindPrecedents),
-    runStep(ctx, "step1.x_profile", `Reading ${first}'s recent X posts`, () => xProfile({ target }, ctx), summarizeXProfile),
-    runStep(ctx, "step1.instagram_public", `Checking ${first}'s public Instagram`, () => instagramPublic({ target }, ctx), summarizeInstagramPublic),
-    runStep(ctx, "step1.guess_work_email", `Estimating ${first}'s work email`, () => guess_work_email({ target }, ctx), summarizeGuessWorkEmail),
-    runStep(ctx, "step1.linkedin_profile", `Opening ${first}'s LinkedIn in your Chrome`, () => linkedinProfile({ target }, ctx), summarizeLinkedInProfile),
-  ]);
+  const xHandleP = target.x_handle
+    ? Promise.resolve()
+    : step("step0.find_x_handle", `Finding ${input.name}'s X account`, () => findXHandle({ target }, ctx), summarizeFindXHandle)
+        .then((xh) => { if (xh?.handle) target.x_handle = xh.handle; });
 
-  // LinkedIn (computer use) runs in parallel with the email guess, so a company it reads arrives too late.
-  // When the email step had no company, take it from LinkedIn's current role and run the email step again.
-  let email = email0;
-  const liCompany = companyFromRole(li?.data?.current_role) ?? companyFromRole(li?.data?.headline);
-  if (!target.company && liCompany) {
-    target.company = liCompany;
-    if (email0?.skipped || !email0?.email) {
-      email = await runStep(ctx, "step1.guess_work_email_retry", `Estimating ${first}'s work email (company from LinkedIn: ${liCompany})`,
-        () => guess_work_email({ target }, ctx), summarizeGuessWorkEmail) ?? email0;
-    }
-  }
-
-  // STEP 2 (parallel)
+  // STEP 1 + 2: start everything that only needs the identified person.
+  const liP = step("step1.linkedin_profile", `Opening ${first}'s LinkedIn in your Chrome`, () => linkedinProfile({ target }, ctx), summarizeLinkedInProfile);
+  const webP = step("step1.search_web", `Reading ${first}'s bio, interviews and essays`, () => search_web({ target }, ctx), summarizeSearchWeb);
+  const podsP = step("step1.podcast_quotes", `Finding ${first}'s podcasts and talks`, () => podcast_quotes({ target }, ctx), summarizePodcastQuotes);
+  const precP = step("step1.find_precedents", `Finding people who already reached ${first}`, () => find_precedents({ target }, ctx), summarizeFindPrecedents);
+  const igP = step("step1.instagram_public", `Checking ${first}'s public Instagram`, () => instagramPublic({ target }, ctx), summarizeInstagramPublic);
+  const webMentionsP = step("step2.recent_web_mentions", `Checking news about ${first} this week`, () => recent_web_mentions({ target }, ctx), summarizeRecentWebMentions);
   const bioLinks = [target.website, target.linkedin_url].filter((u): u is string => typeof u === "string");
-  const [webMentions, xMentions, events, booking] = await Promise.all([
-    runStep(ctx, "step2.recent_web_mentions", `Checking news about ${first} this week`, () => recent_web_mentions({ target }, ctx), summarizeRecentWebMentions),
-    runStep(ctx, "step2.recent_x_mentions", `Checking X posts by and about ${first} this week`, () => recentXMentions({ target }, ctx), summarizeRecentXMentions),
-    runStep(ctx, "step2.find_events", `Finding events ${first} joins before ${input.deadline}`, () => find_events({ target, deadline: input.deadline, eventUrls }, ctx), summarizeFindEvents),
-    runStep(ctx, "step2.probe_booking_page", `Looking for ${first}'s booking page`, () => probe_booking_page({ target, bioLinks }, ctx), summarizeProbeBookingPage),
+  const bookingP = step("step2.probe_booking_page", `Looking for ${first}'s booking page`, () => probe_booking_page({ target, bioLinks }, ctx), summarizeProbeBookingPage);
+
+  // Needs the X handle.
+  const xpP = xHandleP.then(() => step("step1.x_profile", `Reading ${first}'s recent X posts`, () => xProfile({ target }, ctx), summarizeXProfile));
+  const xMentionsP = xHandleP.then(() => step("step2.recent_x_mentions", `Checking X posts by and about ${first} this week`, () => recentXMentions({ target }, ctx), summarizeRecentXMentions));
+
+  // Needs your Luma events (or gives up on them when the sign-in check is skipped or over budget).
+  let eventUrls: string[] = [...(input.eventUrls ?? [])];
+  const eventsP = mineP.then((mine) => {
+    eventUrls = [...eventUrls, ...(mine?.events ?? []).map((e) => e.url)];
+    return step("step2.find_events", `Finding events ${first} joins before ${input.deadline}`, () => find_events({ target, deadline: input.deadline, eventUrls }, ctx), summarizeFindEvents);
+  });
+
+  // Needs the company: known now, or read from LinkedIn (this used to race; now it's a dependency).
+  const emailP = (target.company ? Promise.resolve() : liP.then((li) => {
+    const c = companyFromRole(li?.data?.current_role) ?? companyFromRole(li?.data?.headline);
+    if (!target.company && c) target.company = c;
+  })).then(() => step("step1.guess_work_email", `Estimating ${first}'s work email${target.company ? ` (${target.company})` : ""}`, () => guess_work_email({ target }, ctx), summarizeGuessWorkEmail));
+
+  const [login, mine, web, pods, prec, xp, ig, email, li, webMentions, xMentions, events, booking] = await Promise.all([
+    loginP, mineP, webP, podsP, precP, xpP, igP, emailP, liP, webMentionsP, xMentionsP, eventsP, bookingP,
   ]);
 
   const findings = ctx.findings.all().map((f) => ({
@@ -120,6 +159,8 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
     booking_pages: booking ? [...booking.pages, ...booking.paid] : [],
     events: events?.events ?? [],
     email_guess: email ?? null,
+    live_actions: live.list,
+    timing: { elapsed_s: budget.elapsedS(), budget_s: Math.round(budget.totalMs / 1000) },
     summary: {
       counts_by_dimension: countBy(findings.map((f) => f.dimension)),
       x_profile: xp ?? null,
