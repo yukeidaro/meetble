@@ -86,6 +86,18 @@ describe("accounts", () => {
     await Promise.all([tok(), tok(), tok()]);
     expect(calls).toBe(2);
   });
+  it("uses stale keys during a Google outage for at most 6 hours past expiry", async () => {
+    let fail = false, t = 1_800_000_000_000;
+    const fetchImpl = async () => fail ? { ok: false } : { ok: true, headers: new Map([["cache-control", "max-age=60"]]), json: async () => ({ keys: [JWK] }) };
+    const a = setup(good, { fetchImpl, now: () => t });
+    const tok = () => a.verifyGoogle(jwt({ ...good, exp: String(Math.floor(t / 1000) + 600) }));
+    await tok(); // caches keys until t + 60 s
+    fail = true;
+    t += 3 * 3600_000;
+    await expect(tok()).resolves.toMatchObject({ sub: "123" }); // stale but within 6 h
+    t += 4 * 3600_000;
+    await expect(tok()).rejects.toThrow(/reach Google/); // past the limit: 503
+  });
   it("drops a session once its email leaves the allow list", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "mb-"));
     const open = setup(good, { dataDir });

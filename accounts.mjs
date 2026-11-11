@@ -63,12 +63,14 @@ export function createAccounts({ dataDir, clientId, secret, allow = "", fetchImp
   // Concurrent sign-ins share one in-flight fetch, and after a failed fetch nobody retries for 10 s.
   let jwks = null, jwksUntil = 0, lastForced = -Infinity, inflight = null, failedUntil = 0;
   const unreachable = () => httpError(503, "Couldn't reach Google to check the sign-in. Try again.");
+  const STALE_MAX = 6 * 3600_000; // during a Google outage, keep using expired keys for at most 6 h past their expiry
+  const staleOr = (e) => { if (jwks && now() < jwksUntil + STALE_MAX) return jwks; throw e; };
   async function googleKeys(force) {
     if (force && now() - lastForced < 60_000) force = false;
     if (force) lastForced = now();
     if (!force && jwks && now() < jwksUntil) return jwks;
     if (inflight) return inflight;
-    if (now() < failedUntil) { if (jwks) return jwks; throw unreachable(); }
+    if (now() < failedUntil) return staleOr(unreachable());
     inflight = (async () => {
       const r = await fetchImpl("https://www.googleapis.com/oauth2/v3/certs", { signal: AbortSignal.timeout(5000) });
       if (!r.ok) throw unreachable();
@@ -76,7 +78,7 @@ export function createAccounts({ dataDir, clientId, secret, allow = "", fetchImp
       const age = Number(String(r.headers?.get?.("cache-control") || "").match(/max-age=(\d+)/)?.[1] || 3600);
       jwks = Array.isArray(body.keys) ? body.keys : []; jwksUntil = now() + age * 1000;
       return jwks;
-    })().catch((e) => { failedUntil = now() + 10_000; if (jwks) return jwks; throw e.status ? e : unreachable(); })
+    })().catch((e) => { failedUntil = now() + 10_000; return staleOr(e.status ? e : unreachable()); })
       .finally(() => { inflight = null; });
     return inflight;
   }
