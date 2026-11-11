@@ -93,7 +93,7 @@ body.s-connect .hello{margin-bottom:22px}
 body.s-connect .connect{display:flex}
 @keyframes rise{from{opacity:0;transform:translateY(16px)}}
 .connect .sub{margin:0;color:var(--muted);text-align:center;font-size:14px}
-.accts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.accts{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
 .acct{position:relative;border:1px dashed color-mix(in srgb,var(--faint) 70%,transparent);background:transparent;border-radius:18px;padding:18px 8px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;transition:transform .25s,background .3s,border-color .3s,box-shadow .3s}
 .acct:hover{transform:translateY(-2px)}
 .acct .ic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-family:var(--fm);font-weight:500;font-size:13.5px;color:var(--faint);background:var(--soft);transition:all .3s}
@@ -403,6 +403,7 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
   <section class="connect" aria-label="Link accounts">
     <p class="sub">Each account unlocks a research track. The more you link, the deeper the agent digs.</p>
     <div class="accts" id="accts"></div>
+    <div class="mode"><span id="loginNote"></span> <button class="try" id="recheckBtn" type="button" hidden>Re-check sign-ins</button></div>
     <div class="depth">
       <span class="lbl">Research depth<span id="depthN"></span></span>
       <div class="pips" id="pips"></div>
@@ -688,24 +689,51 @@ const ACCTS = [
   {key:'x', ic:'X', nm:'X', on:true},
   {key:'email', ic:'@', nm:'Email', on:false},
   {key:'luma', ic:'Lu', nm:'Luma', on:true},
+  {key:'instagram', ic:'IG', nm:'Instagram', on:false},
   {key:'calendar', ic:'Cal', nm:'Calendar', on:true, plan:true}, // your free time; not a research track
 ];
-const NTRACKS = 6; // web + podcasts need only API keys, plus one per research account
+const NTRACKS = 7;
+const LOGIN_URL = {luma:'https://luma.com/signin', linkedin:'https://www.linkedin.com/login', x:'https://x.com/login', instagram:'https://www.instagram.com/accounts/login/'};
+let loginState = null, pendingLogin = false; // live: real sign-in status from your Chrome // web + podcasts need only API keys, plus one per research account
 const isOn = k => ACCTS.find(a => a.key === k)?.on ?? true;
 const acctName = k => ACCTS.find(a => a.key === k)?.nm;
+function acctStatus(a){
+  if(LIVE && LOGIN_URL[a.key]){
+    if(loginState === 'checking') return 'Checking…';
+    if(loginState?.sites?.[a.key]) return a.on ? esc(loginState.sites[a.key].account || 'Signed in') : 'Sign in';
+    if(loginState) return a.on ? 'Connected' : 'Sign in';
+  }
+  return a.on ? 'Connected' : a.plan ? 'Link for free time' : 'Link to unlock';
+}
+async function refreshLogins(force){
+  if(!LIVE) return;
+  loginState = 'checking'; renderAccts();
+  $('#loginNote').textContent = 'Checking your sign-ins in Chrome… (up to a minute)';
+  try{
+    const r = await (await fetch(q('/api/logins' + (force ? '?refresh=1' : '')))).json();
+    loginState = r;
+    if(r.sites) for(const a of ACCTS) if(r.sites[a.key]) a.on = !!r.sites[a.key].logged_in;
+    $('#loginNote').textContent = r.error ? 'Could not check sign-ins: ' + r.error : r.skipped ? 'Sign-in check skipped: ' + (r.reason || '') : 'Click an account to sign in to it in a new tab, then come back here.';
+  }catch{ loginState = {}; $('#loginNote').textContent = 'Could not check sign-ins.'; }
+  renderAccts();
+}
+addEventListener('focus', () => { if(pendingLogin){ pendingLogin = false; refreshLogins(true); } }); // back from the login tab: re-check
 function renderAccts(){
   $('#accts').innerHTML = ACCTS.map(a => `
     <button class="acct ${a.on?'on':''}" type="button" data-k="${a.key}" aria-pressed="${a.on}">
-      <span class="ic">${a.ic}</span><span class="nm">${a.nm}</span><span class="st">${a.on ? 'Connected' : a.plan ? 'Link for free time' : 'Link to unlock'}</span>
+      <span class="ic">${a.ic}</span><span class="nm">${a.nm}</span><span class="st">${acctStatus(a)}</span>
     </button>`).join('');
   const research = ACCTS.filter(a => a.on && !a.plan), n = 2 + research.length;
   $('#pips').innerHTML = Array.from({length:NTRACKS}, (_, i) => `<i class="${i < n ? 'lit' : ''}"></i>`).join('');
   $('#depthN').textContent = `${n}/${NTRACKS}`;
   $('#depthTracks').textContent = ['Web','Podcasts', ...research.map(a => a.nm)].join(' · ') + (isOn('calendar') ? ' · plans fit your calendar' : '');
 }
+$('#recheckBtn').addEventListener('click', () => refreshLogins(true));
 $('#accts').addEventListener('click', e => {
   const b = e.target.closest('.acct'); if(!b) return;
-  const a = ACCTS.find(x => x.key === b.dataset.k); a.on = !a.on; renderAccts();
+  const a = ACCTS.find(x => x.key === b.dataset.k);
+  if(LIVE && LOGIN_URL[a.key] && !a.on){ pendingLogin = true; window.open(LOGIN_URL[a.key], '_blank'); return; } // you sign in yourself; we never see the password
+  a.on = !a.on; renderAccts();
 });
 renderAccts();
 
@@ -728,7 +756,7 @@ $('#goBtn').addEventListener('click', () => {
   document.body.className = 's-run'; scrollTo(0,0); LIVE ? runLive() : run(); });
 
 /* ---------- live mode: served by server.mjs, runs the real pipeline. Opened as a file (or ?demo=1) it plays the sample run. ---------- */
-let LIVE = false, es = null;
+var LIVE = false, es = null; // var: renderAccts() runs before this line
 // Served by server.mjs: same origin. Hosted (GitHub Pages): talk to the server on this computer, http://localhost:8787 (or ?api=...).
 const QS = new URLSearchParams(location.search);
 const API = QS.get('api') || (/github\.io$/.test(location.hostname) ? 'http://localhost:8787' : '');
@@ -743,6 +771,7 @@ const q = path => API + path + (TOK ? (path.includes('?') ? '&' : '?') + TOK : '
     const miss = [!h.has_dist && 'dist/ (run npm run build)', !h.has_env && '.env', !h.has_profile && 'user_profile.json'].filter(Boolean);
     $('#modeNote').textContent = 'Live mode: runs the real research on this computer.' + (miss.length ? ' Missing: ' + miss.join(', ') : '');
     $('#dReuse').disabled = !h.has_research;
+    $('#recheckBtn').hidden = false; refreshLogins(false);
   }catch{ $('#modeNote').textContent = OFF; $('#modeTag').textContent = 'OFFLINE'; }
 })();
 function onMeta(ev){
