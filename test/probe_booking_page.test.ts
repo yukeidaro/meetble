@@ -128,7 +128,7 @@ describe("probe_booking_page", () => {
     expect(summarizeProbeBookingPage(r)).toBe("found calendly.com/borisj/30min (from bio)");
   });
 
-  it("search hits: medium when named, low otherwise; paid pages are their own kind", async () => {
+  it("search hits are kept only when they name the target; paid pages are their own kind", async () => {
     const { fetch } = router({
       booking: [
         { url: "https://calendly.com/boris-jabes", title: "Boris Jabes - 30 min" },
@@ -140,15 +140,13 @@ describe("probe_booking_page", () => {
     });
     const { ctx } = makeCtx(fetch);
     const r = await probe_booking_page({ target: boris }, ctx);
-    expect(r.pages.map((p) => [p.url, p.verified_name])).toEqual([
-      ["https://calendly.com/boris-jabes", true],
-      ["https://calendly.com/someone-else", false],
-    ]);
+    // live-run regression: unnamed hits (other people, pricing/directory pages) must not be returned
+    expect(r.pages.map((p) => [p.url, p.verified_name])).toEqual([["https://calendly.com/boris-jabes", true]]);
     expect(r.paid).toEqual([{ url: "https://intro.co/borisjabes", platform: "intro.co", source: "search", verified_name: true }]);
     expect(r.probed).toEqual([]); // a named search hit counts as found
     const byUrl = Object.fromEntries(ctx.findings.all().map((f) => [f.source_url, f]));
     expect(byUrl["https://calendly.com/boris-jabes"]!.confidence).toBe("medium");
-    expect(byUrl["https://calendly.com/someone-else"]!.confidence).toBe("low");
+    expect(byUrl["https://calendly.com/someone-else"]).toBeUndefined();
     expect(byUrl["https://intro.co/borisjabes"]!.kind).toBe("paid_consult_page");
   });
 
@@ -184,14 +182,14 @@ describe("probe_booking_page", () => {
     expect(ctx.findings.all()).toEqual([]);
   });
 
-  it("upgrades an unverified search hit when a probe proves it", async () => {
+  it("an unnamed search hit is dropped, and a probe can still prove the same URL", async () => {
     const { fetch } = router({
       booking: [{ url: "https://calendly.com/boris-jabes", title: "30 Minute Meeting" }],
       probe: (url) => (url === "https://calendly.com/boris-jabes" ? { status: 200, text: "Boris Jabes" } : { status: 404 }),
     });
     const { ctx } = makeCtx(fetch);
     const r = await probe_booking_page({ target: boris }, ctx);
-    expect(r.pages).toEqual([{ url: "https://calendly.com/boris-jabes", platform: "calendly.com", source: "search", verified_name: true }]);
+    expect(r.pages).toEqual([{ url: "https://calendly.com/boris-jabes", platform: "calendly.com", source: "probe", verified_name: true }]);
     expect(ctx.findings.all()[0]!.confidence).toBe("medium");
   });
 

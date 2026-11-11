@@ -1,4 +1,4 @@
-// Shared types for Hack Finder research (Steps 0-2). Every tool takes (input, ctx) and returns a typed result.
+// Shared types for Meetble research (Steps 0-2). Every tool takes (input, ctx) and returns a typed result.
 
 export type StepStatus = "running" | "done" | "error" | "skipped";
 

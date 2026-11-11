@@ -85,6 +85,8 @@ async function hunterFind(target: Target, key: string, ctx: ToolContext): Promis
   const email = typeof d?.email === "string" && d.email.includes("@") ? d.email.trim() : undefined;
   if (!email) return null;
   const score = typeof d?.score === "number" ? d.score : undefined;
+  // Hunter lists search-engine query URLs as "sources" (live run: a google.com/search URL); those are not
+  // pages showing the address, so they don't count as evidence.
   const evidence = (d?.sources ?? []).map((s) => s?.uri).filter(isHttpUrl).filter((u) => !isSearchEngineUrl(u));
   // Hunter's own signals only; we never verify. "high" needs Hunter-verified + high score + public sources.
   const verified = d?.verification?.status === "valid";
@@ -328,6 +330,7 @@ export function summarizeGuessWorkEmail(r: GuessWorkEmailResult): string {
     r.method === "hunter"
       ? `Hunter score ${r.hunter_score ?? "n/a"}`
       : `pattern ${r.pattern} from ${r.examples?.length ?? 0} example${r.examples?.length === 1 ? "" : "s"}`;
+  // Say who verified what: Hunter's own check may say "valid"; we never send mail to test it.
   const check = r.method === "hunter" && r.hunter_verification ? `Hunter check: ${r.hunter_verification}` : "unverified";
   return `${r.email} (${how}, ${r.confidence} confidence, ${check})`;
 }

@@ -166,7 +166,9 @@ export function xHandleFromUrl(u: string): string | undefined {
   }
 }
 
+// Profile-site suffixes seen in live titles, e.g. "Boris Jabes - Visiting Partner @ Y Combinator - Crunchbase Person Profile".
 const SITE_SUFFIX = /\s*[|\-–—]\s*(Crunchbase( Person Profile)?|Wellfound|AngelList|PitchBook|Bloomberg|ZoomInfo|RocketReach|Signal|The Org)\s*$/i;
+
 /** "Boris Jabes - Partner at Y Combinator | LinkedIn" → {name, role, company}. */
 export function parseProfileTitle(title: string | null | undefined): { name: string; role?: string; company?: string } | undefined {
   if (typeof title !== "string" || !title.trim()) return undefined;
@@ -245,6 +247,8 @@ export async function resolve_target(input: ResolveTargetInput, ctx: ToolContext
   const pool = hints.length && cands.some((c) => c.hint) ? cands.filter((c) => c.hint) : cands;
   const slugs = new Set(pool.flatMap((c) => (c.slug ? [c.slug] : [])));
   const ambiguous = slugs.size >= 2;
+  // The hint narrows candidates, but a bare LinkedIn title ("Boris Jabes") can't match a hint, so a
+  // hint-only pool may hold no LinkedIn profile. If exactly one LinkedIn profile exists overall, keep it.
   const allSlugs = new Set(cands.flatMap((c) => (c.slug ? [c.slug] : [])));
   const best = pool.find((c) => c.slug) ?? (allSlugs.size === 1 ? cands.find((c) => c.slug) : undefined) ?? pool[0];
 
@@ -254,6 +258,8 @@ export async function resolve_target(input: ResolveTargetInput, ctx: ToolContext
     if (best.company) target.company = best.company;
     if (best.slug) target.linkedin_url = best.url;
   }
+  // The chosen LinkedIn result often has a bare title ("Boris Jabes"), so role/company come back empty.
+  // Take them from another result whose title names the same person (Crunchbase, Wellfound...), preferring hint matches.
   if (!target.company) {
     const titled = all
       .map(({ r }) => ({ r, p: parseProfileTitle(r.title) }))

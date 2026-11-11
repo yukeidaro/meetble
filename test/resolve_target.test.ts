@@ -168,3 +168,24 @@ describe("resolve_target helpers", () => {
     expect(mentionsName(null, "Boris Jabes")).toBe(false);
   });
 });
+
+import { parseProfileTitle as ppt } from "../src/tools/resolve_target.js";
+describe("live-run regressions", () => {
+  it("parses Crunchbase-style titles with '@' and a site suffix", () => {
+    expect(ppt("Boris Jabes - Visiting Partner @ Y Combinator - Crunchbase Person Profile")).toEqual({ name: "Boris Jabes", role: "Visiting Partner", company: "Y Combinator" });
+  });
+});
+
+describe("company fallback from other profile titles", () => {
+  it("fills company when the LinkedIn title is bare", async () => {
+    const { fakeFetch, makeCtx } = await import("./helpers.js");
+    const { resolve_target } = await import("../src/tools/resolve_target.js");
+    const { fetch } = fakeFetch((url, body) => ({ json: { results: body.category === "people" ? [
+      { url: "https://www.linkedin.com/in/borisjabes", title: "Boris Jabes" },
+      { url: "https://www.crunchbase.com/person/boris-jabes", title: "Boris Jabes - Visiting Partner @ Y Combinator - Crunchbase Person Profile" },
+    ] : [] } }));
+    const { ctx } = makeCtx(fetch);
+    const r = await resolve_target({ name: "Boris Jabes", hint: "YC partner" }, ctx);
+    expect(r.target).toMatchObject({ company: "Y Combinator", role: "Visiting Partner", linkedin_url: "https://www.linkedin.com/in/borisjabes" });
+  });
+});

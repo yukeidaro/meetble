@@ -286,7 +286,8 @@ export async function probe_booking_page(input: ProbeBookingInput, ctx: ToolCont
   for (const r of bookingHits) {
     const b = bookingPlatform(r.url);
     if (!b) continue;
-    // keep a search hit only if it names the target (live run: 10 pages for other "Boris"es)
+    // A search hit is kept only if it names the target: the booking-domain search matches any
+    // page with a similar first name (live run: 10 pages for other "Boris"es and directory pages).
     if (!resultMentions(r, target)) continue;
     addPage({ url: r.url, platform: b, source: "search", verified_name: true }, "medium");
   }
@@ -306,7 +307,7 @@ export async function probe_booking_page(input: ProbeBookingInput, ctx: ToolCont
   for (const r of paidHits) {
     const p = paidPlatform(r.url);
     if (!p) continue;
-    if (!resultMentions(r, target)) continue;
+    if (!resultMentions(r, target)) continue; // same reason as above
     addPaid({ url: r.url, platform: p, source: "search", verified_name: true }, "medium");
   }
 

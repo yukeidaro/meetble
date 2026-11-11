@@ -103,7 +103,7 @@ export async function exaMcpSearch(query: string, numResults: number, ctx: ToolC
       await rpc(ctx, "initialize", {
         protocolVersion: "2025-03-26",
         capabilities: {},
-        clientInfo: { name: "hack-finder", version: "0.1.0" },
+        clientInfo: { name: "meetble", version: "0.1.0" },
       });
       await rpc(ctx, "notifications/initialized", {}, true).catch(() => undefined);
     })().catch((e) => { initPromise = undefined; throw e; }); // failed handshake: let the next call retry
