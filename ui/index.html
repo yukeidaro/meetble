@@ -1181,10 +1181,12 @@ function onActions(ev){
   pTotal = typeof ev.p_total === 'number' ? ev.p_total : null;
   const prev = actions;
   actions = ev.actions.slice().sort((a,b) => pOf(b) - pOf(a));
-  // A live card the person already acted on keeps its status on the ranked card for the same route (same type + link).
+  // A live card the person already acted on keeps its status on the ranked card for the same route: same type and
+  // link and, for an intro, the same contact. Not when the ranked card brings a draft, which still needs sending.
+  const sameContact = (live, a) => !live.contact || `${a.title} ${(a.how || []).join(' ')}`.toLowerCase().includes(live.contact.replace(/^@/, '').toLowerCase());
   for (const a of actions) {
-    if (status[a.id]) continue;
-    const was = prev.find(x => status[x.id] && x.id !== a.id && x.type === a.type && x.url && x.url === a.url);
+    if (status[a.id] || a.draft) continue;
+    const was = prev.find(x => x.provisional && status[x.id] && x.id !== a.id && x.type === a.type && x.url && x.url === a.url && sameContact(x, a));
     if (was) status[a.id] = { ...status[was.id], id: a.id };
   }
   cur = 0; dir = 'r';

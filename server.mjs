@@ -169,7 +169,7 @@ function toUiAction(a) {
   whyDo.push(`${a.cost_jpy == null ? "price not checked yet" : `¥${Number(a.cost_jpy).toLocaleString()}`} · ${a.hours}h of your time · ${a.days_to_outcome} day(s) to a result`);
   const inTotal = a.in_total ?? (a.fits_deadline !== false && a.fits_budget !== false);
   return {
-    id: a.id, type: a.type, kind: draft || url ? "agent" : "you", out: OUT_OF[a.type] || "reply",
+    id: a.id, type: a.type, kind: draft || url ? "agent" : "you", out: OUT_OF[a.type] || "reply", provisional: !!a.provisional, contact: a.contact || "",
     title: a.title, base: a.p, rel: 1, time: 1, warm: 1, chan: 1, // the % is computed in Python; pass it through as-is
     late: !inTotal, lateText: a.fits_deadline === false ? "Too slow for the deadline" : "Over budget",
     cta: draft && url ? "Copy draft & open" : draft ? "Copy the draft" : url ? "Open the link" : "Add to my plan",
