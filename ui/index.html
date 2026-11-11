@@ -1041,7 +1041,7 @@ function onFinding(ev){
   const d = document.createElement('div');
   if(ev.section === 'niche'){
     d.className = 'fact nk';
-    d.innerHTML = `<div class="v"><span class="tag">${esc(ev.label || 'Detail')}</span><div class="claim">${claim}</div>${ev.use ? `<div class="use"><b>Use it</b><span>${esc(ev.use)}</span></div>` : ''}<div class="meta">${src}${ev.depth ? `<span class="depth">${esc(ev.depth)}</span>` : ''}${ev.date ? `<span>${esc(ev.date)}</span>` : ''}</div></div>`;
+    d.innerHTML = `<div class="v"><span class="tag">${esc(ev.label || 'Detail')}</span><div class="claim">${claim}</div>${ev.use ? `<div class="use"><b>Use it</b><span>${esc(ev.use)}</span></div>` : ''}</div>`;
     d.dataset.o = ev.rank ?? 50;
   } else {
     d.className = 'fact' + (ev.label ? ' kv' : '');
