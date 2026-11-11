@@ -486,6 +486,8 @@ button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(
 .dcard{box-shadow:var(--shadow),0 30px 70px -36px var(--p2)}
 .dcard::before{inset:0;background:conic-gradient(from var(--ang),var(--p1),transparent 28%,var(--p2) 52%,transparent 76%,var(--p1))}
 .pbar .trk i{background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3))}
+/* the input always shows its lavender border and soft ring, not only while typing */
+.ask-bar,.ask-bar:focus-within{border-color:color-mix(in srgb,var(--a1) 35%,var(--line));box-shadow:0 0 0 5px color-mix(in srgb,var(--a1) 9%,transparent),var(--shadow)}
 </style>
 </head>
 <body>
