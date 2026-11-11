@@ -23,7 +23,7 @@ SCHEMA = obj({
 })
 
 SYSTEM = (
-    "You are the needs analyst of Meetball, an agent that finds the best way for a founder to reach one person. "
+    "You are the needs analyst of Meetble, an agent that finds the best way for a founder to reach one person. "
     "Step 3: from the research, guess what the target wants right now and when they can be reached. "
     + SHARED_RULES
 )

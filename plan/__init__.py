@@ -1,4 +1,4 @@
-"""Meetball Steps 3-5: needs, interview, actions with likelihood %.
+"""Meetble Steps 3-5: needs, interview, actions with likelihood %.
 
 Reads the Steps 1-2 research file (out/research.json) and adds:
   step 3 -> needs, availability, gift_ideas, persona

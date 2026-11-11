@@ -45,7 +45,7 @@ def parse_answers(s):
 
 def write_report(state, path):
     g = state.get("goal", {})
-    L = [f"# Meetball plan: {g.get('target_name') or g.get('target')}", ""]
+    L = [f"# Meetble plan: {g.get('target_name') or g.get('target')}", ""]
     L.append(f"**Chance of reaching them by the deadline: {pct(state.get('p_total', 0))}**  ")
     L.append(f"Deadline: {g.get('deadline', 'not set')}. {state.get('plan_summary', '')}")
     L += ["", "## Who they are", state.get("persona", ""), "", "## What they want (Step 3)"]
@@ -87,7 +87,7 @@ def write_report(state, path):
 
 def main(argv=None):
     common.setup_console()
-    ap = argparse.ArgumentParser(prog="python -m plan", description="Meetball Steps 3-5")
+    ap = argparse.ArgumentParser(prog="python -m plan", description="Meetble Steps 3-5")
     ap.add_argument("research", help="Steps 1-2 output, e.g. out\\research.json")
     ap.add_argument("--profile", help="user_profile.json (default: next to you or the research file)")
     ap.add_argument("--out", default=os.path.join("out", "plan.json"))

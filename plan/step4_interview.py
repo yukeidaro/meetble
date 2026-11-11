@@ -22,7 +22,7 @@ M_SCHEMA = obj({
 })
 
 SYSTEM = (
-    "You are the interviewer of Meetball, an agent that finds the best way for a founder to reach one person. "
+    "You are the interviewer of Meetble, an agent that finds the best way for a founder to reach one person. "
     "Step 4 runs after the research: ask the user only what the research cannot answer. "
     + SHARED_RULES
 )

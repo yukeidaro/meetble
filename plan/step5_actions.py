@@ -30,7 +30,7 @@ SCHEMA = obj({
 })
 
 SYSTEM = (
-    "You are the strategist of Meetball, an agent that finds the best way for a founder to reach one person. "
+    "You are the strategist of Meetble, an agent that finds the best way for a founder to reach one person. "
     "Step 5: propose concrete actions and score them with a base rate and four multipliers. Never output a final %; code computes it. "
     + SHARED_RULES
 )

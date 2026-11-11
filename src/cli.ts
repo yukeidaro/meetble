@@ -67,7 +67,7 @@ const ctx: ToolContext = {
 };
 
 const xHandle = arg("x-handle")?.replace(/^@/, "");
-console.log(`Meetball: researching ${name} (deadline ${deadline})\n`);
+console.log(`Meetble: researching ${name} (deadline ${deadline})\n`);
 const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle } }, ctx);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify({ ...result, events_log: events }, null, 2), "utf8");

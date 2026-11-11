@@ -1,11 +1,32 @@
-node_modules/
-dist/
-out/
+# Secrets: never commit
 .env
 .env.*
 !.env.example
-.venv/
+
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+
+# Run output
+logs/
+runs/
+*.log
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Research output
+out/
+
+# Build / deps / archives
+node_modules/
+dist/
 *.zip
+
+# Personal profile (contains private notes)
 user_profile.json
