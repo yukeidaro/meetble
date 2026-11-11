@@ -1,0 +1,277 @@
+// Meetble local server: serves the UI and runs the real pipeline behind it. Zero dependencies.
+//   node server.mjs            -> http://localhost:8787
+//   PORT=9000 node server.mjs  (PowerShell: $env:PORT=9000; node server.mjs)
+// Steps 0-2: node dist/cli.js ...  -> out/research.json
+// Steps 3-5: python -m plan ...     -> out/plan.json, out/plan.md
+// Each stdout checklist line ("ICON label (note)") becomes a UI event, streamed to the browser over SSE.
+import { createServer } from "node:http";
+import { spawn } from "node:child_process";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = dirname(fileURLToPath(import.meta.url));
+const PORT = Number(process.env.PORT) || 8787;
+const PY = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
+const OUT = join(ROOT, "out");
+const RESEARCH = join(OUT, "research.json");
+const PLAN = join(OUT, "plan.json");
+
+// ---------- the ask: "Meet Boris Jabes before 22:45 tonight, in person. Budget ¥30,000." ----------
+const ymd = (d) => d.toLocaleDateString("en-CA"); // local YYYY-MM-DD
+const DAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+
+export function parseAsk(text, now = new Date()) {
+  const t = String(text || "").trim();
+  let name = (t.match(/\b(?:[Mm]eet|[Rr]each|[Tt]alk to|[Cc]ontact|[Gg]et to)\s+((?:[A-Z][\p{L}.'-]*\s*){1,4})/u)?.[1] || "").trim();
+  if (!name) name = (t.match(/(?:[A-Z][\p{L}.'-]+\s+){1,3}[A-Z][\p{L}.'-]+/u)?.[0] || "").trim();
+  if (!name && t.split(/\s+/).length <= 4) name = t.replace(/[.,!?]+$/, "");
+  name = name.replace(/\s+(Before|By|Tonight|Today|Tomorrow|In|On|At|This|Next)$/, "").trim();
+
+  let deadline, label;
+  const add = (n) => { const d = new Date(now); d.setDate(d.getDate() + n); return d; };
+  const iso = t.match(/\b(20\d\d-\d\d-\d\d)\b/);
+  const inN = t.match(/\bin\s+(\d+)\s+days?\b/i);
+  const wd = DAYS.findIndex((d) => new RegExp(`\\b${d}\\b`, "i").test(t));
+  if (iso) { deadline = iso[1]; label = iso[1]; }
+  else if (/\b(tonight|today)\b/i.test(t)) { deadline = ymd(now); label = "tonight"; }
+  else if (/\btomorrow\b/i.test(t)) { deadline = ymd(add(1)); label = "tomorrow"; }
+  else if (inN) { deadline = ymd(add(+inN[1])); label = `in ${inN[1]} days`; }
+  else if (/\bnext week\b/i.test(t)) { deadline = ymd(add(7)); label = "next week"; }
+  else if (/\b(this week|end of (the )?week)\b/i.test(t)) { deadline = ymd(add((5 - now.getDay() + 7) % 7 || 7)); label = "this week"; }
+  else if (wd >= 0) { deadline = ymd(add((wd - now.getDay() + 7) % 7 || 7)); label = DAYS[wd][0].toUpperCase() + DAYS[wd].slice(1); }
+  else { deadline = ymd(add(7)); label = "in a week"; }
+  const time = t.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/)?.[0];
+  if (time && label === "tonight") label = `${time} tonight`;
+
+  const yen = t.match(/[¥￥]\s?([\d,]+)/) || t.match(/([\d,]+)\s?(?:yen|jpy|円)/i);
+  const usd = t.match(/\$\s?([\d,]+)/);
+  const budget_jpy = yen ? +yen[1].replace(/,/g, "") : usd ? +usd[1].replace(/,/g, "") * 150 : undefined;
+  const meet = /in person|face|coffee|hello/i.test(t) ? "in-person meeting" : /\bcall\b/i.test(t) ? "15-min call" : /\breply\b/i.test(t) ? "reply" : "reply, call or in-person meeting";
+  return { name, deadline, deadline_label: label, budget_jpy, meet };
+}
+
+// ---------- stdout checklist line -> step ----------
+const ICONS = [["[..]", "running"], ["[ok]", "done"], ["[x]", "error"], ["[--]", "skipped"], ["⏳", "running"], ["✅", "done"], ["❌", "error"], ["⏭️", "skipped"], ["⏭", "skipped"]];
+
+export function parseLine(raw) {
+  let s = raw.trim(), status;
+  if (s.startsWith("[") && !s.startsWith("[..]") && !s.startsWith("[ok]") && !s.startsWith("[x]") && !s.startsWith("[--]")) {
+    const m = s.match(/^\[([^\]]+)\]\s*(.*)$/u); // python: "[✅] Step 3 · label (note)"
+    if (!m) return null;
+    status = ICONS.find(([i]) => i === m[1] || i.startsWith(m[1]) || m[1].startsWith(i))?.[1];
+    s = m[2];
+  } else {
+    const hit = ICONS.find(([i]) => s.startsWith(i));
+    if (!hit) return null;
+    status = hit[1]; s = s.slice(hit[0].length).replace(/^️/, "").trim();
+  }
+  if (!status) return null;
+  let step;
+  const st = s.match(/^Step\s+(\S+)\s+·\s+(.*)$/u);
+  if (st) { step = st[1]; s = st[2]; }
+  let label = s, note = "";
+  if (s.endsWith(")")) { // last balanced "( ... )" is the note
+    let depth = 0;
+    for (let i = s.length - 1; i >= 0; i--) {
+      if (s[i] === ")") depth++;
+      else if (s[i] === "(" && --depth === 0) { if (s[i - 1] === " ") { label = s.slice(0, i - 1); note = s.slice(i + 1, -1); } break; }
+    }
+  }
+  return { status, step, label: label.trim(), note };
+}
+
+const G = { 0: "Step 0 · Who", 1: "Step 1 · What they want", 2: "Step 2 · Right now", 3: "Step 3 · Needs", 4: "Step 4 · Interview", 5: "Step 5 · Plan" };
+function researchGroup(label) {
+  if (/signed in|Re-checking sign|Luma events|^Identifying|X account|Sign in/i.test(label)) return G[0];
+  if (/this week|events .* joins|booking page/i.test(label)) return G[2];
+  return G[1];
+}
+function domainOf(label) {
+  if (/podcast|talks/i.test(label)) return ["youtube.com", "Searching podcasts and talks"];
+  if (/LinkedIn/i.test(label)) return ["linkedin.com", label];
+  if (/Luma/i.test(label)) return ["luma.com", label];
+  if (/Instagram/i.test(label)) return ["instagram.com", label];
+  if (/\bX\b/.test(label)) return ["x.com", label];
+  if (/booking/i.test(label)) return ["calendly.com", label];
+  if (/email/i.test(label)) return ["mail domain lookup", label];
+  if (/news/i.test(label)) return ["exa.ai", label];
+  if (/needs|want\b|^Rank|^Interview you|^Load research|Claude API/i.test(label) && !/bio/i.test(label)) return ["reasoning", label];
+  return ["exa.ai", label];
+}
+const sid = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.codePointAt(0)) >>> 0; return h.toString(36); };
+
+// ---------- research.json / plan.json -> UI events ----------
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
+const DIM_LABEL = { web: "Web", podcast: "Talks about", x: "X", linkedin: "LinkedIn", instagram: "Instagram", email: "Email" };
+
+function findingEvents(research) {
+  const evs = [], per = { persona: 0, now: 0, prec: 0 };
+  for (const f of research.findings || []) {
+    const dim = f.dimension || "web";
+    const section = dim === "precedent" ? "prec" : f.step === 2 || ["mention", "event", "booking"].includes(dim) ? "now" : "persona";
+    if (per[section]++ >= 14) continue;
+    const label = section === "persona" ? (f.kind === "bio" ? "Role" : DIM_LABEL[dim] || "") : "";
+    evs.push({ type: "finding", section, label, claim: f.quote ? `${f.claim} “${String(f.quote).slice(0, 160)}”` : f.claim, source_url: f.source_url });
+  }
+  return evs;
+}
+
+const OUT_OF = { event: "face", network_first: "face", referral: "call", paid_intro: "call", booking_page: "call", paid_consult: "call" };
+function toUiAction(a) {
+  const url = a.channel_url || "", draft = a.draft || "";
+  const acct = /linkedin\.com/i.test(url) ? "linkedin" : /(^|\/\/|\.)x\.com|twitter\.com/i.test(url) ? "x" : /lu\.ma|luma\.com/i.test(url) ? "luma" : null;
+  const r = a.reasons || {};
+  const whyDo = [r.m_relevance, r.m_warmth, r.m_timing, r.m_channel, r.base_rate].filter(Boolean).slice(0, 4);
+  whyDo.push(`¥${Number(a.cost_jpy || 0).toLocaleString()} · ${a.hours}h of your time · ${a.days_to_outcome} day(s) to a result`);
+  const inTotal = a.in_total ?? (a.fits_deadline !== false && a.fits_budget !== false);
+  return {
+    id: a.id, type: a.type, kind: draft || url ? "agent" : "you", out: OUT_OF[a.type] || "reply",
+    title: a.title, base: a.p, rel: 1, time: 1, warm: 1, chan: 1, // the % is computed in Python; pass it through as-is
+    late: !inTotal, lateText: a.fits_deadline === false ? "Too slow for the deadline" : "Over budget",
+    cta: draft && url ? "Copy draft & open" : draft ? "Copy the draft" : url ? "Open the link" : "Add to my plan",
+    doWhat: (a.how || []).join(" → ") || a.title, draft, url, acct,
+    doneNote: draft || url ? "" : "on your plan", whyDo, how: a.how || [], cost: a.cost_jpy, hours: a.hours, days: a.days_to_outcome,
+  };
+}
+
+// ---------- jobs ----------
+let job = null;
+
+function startJob(body) {
+  if (job && !job.done) stopJob();
+  const ask = parseAsk(body.ask);
+  if (body.name) ask.name = String(body.name).trim();
+  const j = { id: Date.now().toString(36), events: [], clients: new Set(), done: false, child: null, ask };
+  job = j;
+  const push = (ev) => { if (job !== j) return; j.events.push(ev); for (const c of j.clients) c.write(`data: ${JSON.stringify(ev)}\n\n`); };
+  j.push = push;
+  run(j, body).catch((e) => push({ type: "step", id: "fatal", group: G[0], label: "The run stopped", status: "none", note: String(e?.message || e).slice(0, 200) }))
+    .finally(() => { j.done = true; push({ type: "end" }); });
+  return j;
+}
+
+function stopJob() {
+  if (!job) return;
+  try { job.child?.kill(); } catch {}
+  job.done = true;
+}
+
+function runProc(j, cmd, args, env, onLine) {
+  return new Promise((resolve) => {
+    const p = spawn(cmd, args, { cwd: ROOT, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
+    j.child = p;
+    const err = [];
+    let buf = "";
+    p.stdout.setEncoding("utf8");
+    p.stdout.on("data", (d) => { buf += d; const lines = buf.split(/\r?\n/); buf = lines.pop(); lines.forEach(onLine); process.stdout.write(d); });
+    p.stderr.setEncoding("utf8");
+    p.stderr.on("data", (d) => { err.push(d); process.stderr.write(d); });
+    p.on("error", (e) => { err.push(String(e.message)); resolve({ code: -1, err: err.join("") }); });
+    p.on("close", (code) => { if (buf) onLine(buf); resolve({ code, err: err.join("") }); });
+  });
+}
+
+function stepHandler(j, groupFor) {
+  const seen = new Set();
+  let signIn = false;
+  return (line) => {
+    if (j.done) return;
+    if (/Please sign in yourself/i.test(line)) { signIn = true; return; }
+    if (signIn && /^\s+-\s/.test(line)) {
+      const t = line.replace(/^\s+-\s/, "");
+      j.push({ type: "step", id: "si" + sid(t), group: G[0], label: "Sign in needed in your Chrome", status: "locked", note: t });
+      return;
+    }
+    const s = parseLine(line);
+    if (!s) { if (line.trim()) j.push({ type: "log", text: line.trim() }); return; }
+    if (s.step === "5" && /^\s*[\d.<>]+%/.test(s.label)) return; // per-action lines: the deck shows these
+    const group = s.step ? (G[s.step] || G[5]) : groupFor(s.label);
+    const id = "s" + sid(group + s.label);
+    const status = s.status === "running" ? "running" : s.status === "done" ? "done" : "none";
+    const note = s.status === "error" ? `error: ${s.note}` : s.note;
+    j.push({ type: "step", id, group, label: s.label, status, note });
+    if (s.status === "running" && !seen.has(id)) { seen.add(id); const [domain, action] = domainOf(s.label); j.push({ type: "browse", domain, action, url: domain }); }
+  };
+}
+
+async function run(j, body) {
+  const { push, ask } = j;
+  push({ type: "meta", name: ask.name, deadline: ask.deadline, deadline_label: ask.deadline_label, budget_jpy: ask.budget_jpy });
+  if (!ask.name) throw new Error("Couldn't find a name in that. Try: Meet Boris Jabes before Friday");
+
+  // Steps 0-2
+  const reuse = body.reuse && existsSync(RESEARCH);
+  if (reuse) {
+    push({ type: "step", id: "reuse", group: G[0], label: "Reused the last research run", status: "done", note: "out/research.json" });
+  } else {
+    if (!existsSync(join(ROOT, "dist", "cli.js"))) throw new Error("dist/cli.js is missing. Run: npm install, then npm run build");
+    const args = [join(ROOT, "dist", "cli.js"), ask.name, "--deadline", ask.deadline, "--out", RESEARCH];
+    if (body.hint) args.push("--hint", String(body.hint));
+    if (body.x_handle) args.push("--x-handle", String(body.x_handle).replace(/^@/, ""));
+    for (const u of [].concat(body.event_urls || []).filter(Boolean)) args.push("--event-url", String(u));
+    const r = await runProc(j, process.execPath, args, {}, stepHandler(j, researchGroup));
+    if (j.done) return;
+    if (r.code !== 0 || !existsSync(RESEARCH)) throw new Error(`Research failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no output"}`);
+  }
+  const research = JSON.parse(readFileSync(RESEARCH, "utf8").replace(/^﻿/, ""));
+  const t = research.target_id || {};
+  push({ type: "meta", name: t.name || ask.name, role: [t.role, t.company].filter(Boolean).join(" · ") });
+  for (const ev of findingEvents(research)) push(ev);
+
+  // Steps 3-5
+  research.goal = { ...(research.goal || {}), meet: ask.meet, ...(ask.budget_jpy ? { budget_jpy: ask.budget_jpy } : {}) };
+  writeFileSync(RESEARCH, JSON.stringify(research, null, 2), "utf8");
+  const pargs = ["-m", "plan", RESEARCH, "--out", PLAN, "--no-interview"];
+  if (existsSync(join(ROOT, "user_profile.json"))) pargs.push("--profile", join(ROOT, "user_profile.json"));
+  const mtime = () => (existsSync(PLAN) ? statSync(PLAN).mtimeMs : 0), before = mtime();
+  const r = await runProc(j, PY, pargs, { PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }, stepHandler(j, () => G[5]));
+  if (j.done) return;
+  const planText = mtime() > before ? readFileSync(PLAN, "utf8") : null;
+  if (!planText) throw new Error(`Planning failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no plan written"}`);
+  const plan = JSON.parse(planText.replace(/^﻿/, ""));
+  if (plan.persona) push({ type: "finding", section: "persona", label: "Summary", claim: plan.persona, via: "Meetble" });
+  const actions = (plan.actions || []).map(toUiAction);
+  push({ type: "actions", actions, p_total: plan.p_total, summary: plan.plan_summary || "" });
+  if (!actions.length) throw new Error("No actions came back from Step 5");
+}
+
+// ---------- http ----------
+const MIME = { ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8", ".md": "text/markdown; charset=utf-8" };
+const send = (res, code, body, type = "application/json; charset=utf-8") => { res.writeHead(code, { "content-type": type, "cache-control": "no-store" }); res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body)); };
+
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url, "http://localhost");
+  const p = url.pathname;
+  try {
+    if (req.method === "GET" && (p === "/" || p === "/index.html")) return send(res, 200, readFileSync(join(ROOT, "ui", "index.html")), MIME[".html"]);
+    if (p === "/api/health") return send(res, 200, { ok: true, has_dist: existsSync(join(ROOT, "dist", "cli.js")), has_research: existsSync(RESEARCH), has_profile: existsSync(join(ROOT, "user_profile.json")), has_env: existsSync(join(ROOT, ".env")) });
+    if (p === "/api/parse") return send(res, 200, parseAsk(url.searchParams.get("ask")));
+    if (req.method === "POST" && p === "/api/run") {
+      let raw = ""; for await (const c of req) raw += c;
+      const j = startJob(JSON.parse(raw || "{}"));
+      return send(res, 200, { id: j.id, ask: j.ask });
+    }
+    if (req.method === "POST" && p === "/api/stop") { stopJob(); return send(res, 200, { ok: true }); }
+    if (p === "/api/stream") {
+      if (!job || job.id !== url.searchParams.get("id")) return send(res, 404, { error: "no such run" });
+      res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
+      const j = job;
+      for (const ev of j.events) res.write(`data: ${JSON.stringify(ev)}\n\n`); // replay, so a reconnect never restarts the run
+      if (j.done) return res.end();
+      j.clients.add(res);
+      req.on("close", () => j.clients.delete(res));
+      return;
+    }
+    const f = { "/out/plan.md": join(OUT, "plan.md"), "/out/plan.json": PLAN, "/out/research.json": RESEARCH }[p];
+    if (f) return existsSync(f) ? send(res, 200, readFileSync(f), MIME[f.slice(f.lastIndexOf("."))]) : send(res, 404, { error: "not yet" });
+    send(res, 404, { error: "not found" });
+  } catch (e) {
+    send(res, 500, { error: String(e?.message || e) });
+  }
+});
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  server.listen(PORT, "127.0.0.1", () => console.log(`Meetble is running: open http://localhost:${PORT}`));
+}
+export { server, toUiAction, findingEvents };
