@@ -44,8 +44,32 @@ def _ranges_text():
     return f"Base-rate ranges by type:\n{b}\nMultiplier ranges (1.0 = neutral):\n{m}"
 
 
-LIVE_KEYS = ("live", "is_live", "active", "in_use")
+LIVE_KEYS = ("live", "is_live", "slots_confirmed")
 UNVERIFIED_BOOKING_CAP = 0.05
+ONLY_ROUTE_BOOKING_CAP = 0.15
+BOOKING_HOSTS = ("calendly.com", "cal.com", "savvycal.com", "zcal.co", "tidycal.com", "koalendar.com", "youcanbook.me")
+
+
+def _norm_url(u):
+    return text(u).lower().split("?")[0].split("#")[0].rstrip("/").replace("https://", "").replace("http://", "").replace("www.", "")
+
+
+def is_booking_action(a, state):
+    """True if the action books through a booking page: by type, by a known booking_pages URL, or by a booking host."""
+    if a.get("type") == "booking_page":
+        return True
+    u = _norm_url(a.get("channel_url"))
+    if not u:
+        return False
+    known = {_norm_url(b.get("url")) for b in (state.get("booking_pages") or []) if isinstance(b, dict)}
+    return u in known or any(u.startswith(h) or ("." + h) in u for h in BOOKING_HOSTS)
+
+
+def booking_is_live(a, live_urls):
+    """A booking action keeps its score only if its own page is verified live (or it names no URL and some page is live)."""
+    u = _norm_url(a.get("channel_url"))
+    live = {_norm_url(x) for x in live_urls if x}
+    return (u in live) if u else bool(live_urls)
 
 
 def live_booking_urls(state):
@@ -53,6 +77,8 @@ def live_booking_urls(state):
     urls = []
     for b in state.get("booking_pages") or []:
         if not isinstance(b, dict):
+            continue
+        if b.get("slots_confirmed") is False:
             continue
         if any(b.get(k) is True for k in LIVE_KEYS) or str(b.get("status", "")).lower() == "live":
             urls.append(b.get("url", ""))
@@ -117,12 +143,16 @@ summary: one sentence on the best route."""
         a["status"] = "proposed"
         a["_src_index"] = idx
         a = score_action(a, days_left, budget)
-        if a["type"] == "booking_page" and not live:
-            a["p"] = round(min(a["p"], UNVERIFIED_BOOKING_CAP), 4)
-            a.setdefault("flags", []).append("booking page not verified as live: capped at 5%")
+        actions.append(a)
+
+    others = [a for a in actions if not is_booking_action(a, state)]
+    cap = UNVERIFIED_BOOKING_CAP if others else ONLY_ROUTE_BOOKING_CAP
+    for a in actions:
+        if is_booking_action(a, state) and not booking_is_live(a, live):
+            a["p"] = round(min(a["p"], cap), 4)
+            a.setdefault("flags", []).append(f"booking page not verified as live (no open slots confirmed): capped at {round(cap * 100)}%")
             if "unverified" not in a["title"].lower():
                 a["title"] += " (unverified page)"
-        actions.append(a)
 
     actions.sort(key=lambda a: (not (a["fits_deadline"] and a["fits_budget"]), -a["p"]))
     src_to_id = {}

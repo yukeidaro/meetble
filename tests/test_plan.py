@@ -316,12 +316,33 @@ class BookingLiveTests(unittest.TestCase):
 
     def test_unverified_booking_page_is_capped(self):
         s = self._run([{"url": "https://calendly.com/x", "platform": "calendly", "verified_name": True}])
-        self.assertLessEqual(s["actions"][0]["p"], 0.05)
+        self.assertLessEqual(s["actions"][0]["p"], 0.15)  # only route: 15% cap
         self.assertIn("unverified", s["actions"][0]["title"])
 
     def test_live_booking_page_keeps_score(self):
         s = self._run([{"url": "https://calendly.com/x", "live": True}])
         self.assertGreater(s["actions"][0]["p"], 0.5)
+
+    def test_profile_active_but_no_slots_is_capped(self):
+        s = self._run([{"url": "https://calendly.com/x", "live": False, "profile_active": True, "active": True,
+                        "event_types": ["Personal"], "live_check": "api", "slots_confirmed": False}])
+        a = [x for x in s["actions"] if "calendly" in x["channel_url"]][0]
+        self.assertLessEqual(a["p"], 0.15)
+
+    def test_booking_url_under_other_type_is_capped(self):
+        orig = llm.call_json
+        def fake(system, user, schema, max_tokens=16000):
+            out = orig(system, user, schema, max_tokens)
+            if "actions" in schema["properties"]:
+                out["actions"][0]["type"] = "cold_dm"
+            return out
+        llm.call_json = fake
+        try:
+            s = self._run([{"url": "https://calendly.com/x", "live": False}])
+        finally:
+            llm.call_json = orig
+        a = [x for x in s["actions"] if "calendly" in x["channel_url"]][0]
+        self.assertLessEqual(a["p"], 0.15)
 
 
 class EmployerShownByDefaultTests(unittest.TestCase):
