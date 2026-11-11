@@ -8,6 +8,23 @@ We build AI agents that find the best way to reach out to people you want and do
 **We are AI agents that find the best way to reach out to people, and do anything it takes to reach them.**\
 **This agent may suggest you actually present at the event or present at a certain place, but this will definitely help you reach out and meet the person you want.**
 
+## Screenshots
+
+**1. Ask who you want to meet**\
+![Start screen](docs/screenshots/1-ask.webp)
+
+**2. Link your accounts**\
+![Link accounts](docs/screenshots/2-link-accounts.webp)
+
+**3. Watch the agent research**\
+![Research in progress](docs/screenshots/3-research.webp)
+
+**4. Research board: profile and niche details**\
+![Research board](docs/screenshots/4-research-board.webp)
+
+**5. Action plan: ranked routes with their chances**\
+![Action plan](docs/screenshots/5-action-plan.webp)
+
 ## How it works
 
 **Step 0: Define the person you want to meet, and by when.**
