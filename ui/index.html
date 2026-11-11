@@ -365,6 +365,48 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
 .total .ring .big sup{font-size:.45em;vertical-align:baseline;align-self:center;margin:-.9em 0 0 1px}
 .tot-r{display:flex;flex-direction:column;gap:12px;min-width:0}
 .total .tot-r .cap{font-size:24px;text-align:left;max-width:none}
+
+/* ---------- glass pass: the page takes its look from the orb ---------- */
+:root{--bg:#F5F4FA;--ink:#17152B;--muted:#6C6A80;--faint:#A9A7BC;--line:#E7E5F1;--soft:#F0EEF8;
+  --a1:#7C74DE;--a2:#E39AC2;--a3:#D9D2FF;--ok:#2E9E7E;
+  --glass:rgba(255,255,255,.58);--glass-b:rgba(255,255,255,.8);--hl:rgba(255,255,255,.75);
+  --shadow:0 1px 1px rgba(30,20,90,.03),0 18px 48px -22px rgba(100,90,200,.32)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0B0A14;--surface:#16142A;--ink:#EEECF8;--muted:#A3A0BC;--faint:#5E5B78;--line:#24213A;--soft:#1B1930;
+  --a1:#9E97FF;--a2:#F0A8CF;--a3:#2B2552;--ok:#5ED3AE;--glass:rgba(28,25,52,.55);--glass-b:rgba(255,255,255,.08);--hl:rgba(255,255,255,.06);
+  --shadow:0 1px 1px rgba(0,0,0,.3),0 18px 48px -22px rgba(0,0,0,.8)}}
+:root[data-theme="dark"]{--bg:#0B0A14;--surface:#16142A;--ink:#EEECF8;--muted:#A3A0BC;--faint:#5E5B78;--line:#24213A;--soft:#1B1930;
+  --a1:#9E97FF;--a2:#F0A8CF;--a3:#2B2552;--ok:#5ED3AE;--glass:rgba(28,25,52,.55);--glass-b:rgba(255,255,255,.08);--hl:rgba(255,255,255,.06);
+  --shadow:0 1px 1px rgba(0,0,0,.3),0 18px 48px -22px rgba(0,0,0,.8)}
+.card,.ask-bar,.composer,.tabs{background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--shadow),inset 0 1px 0 var(--hl);
+  backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5)}
+.card{border-radius:24px}
+.aurora i{filter:blur(90px)}
+.aurora i:nth-child(1){opacity:.7}
+.aurora i:nth-child(2){opacity:.2}
+.aurora i:nth-child(3){opacity:.18;background:#BFD8FF}
+body.s-run .aurora i{opacity:.4} body.s-run .aurora i:nth-child(n+2){opacity:.12}
+.send,.go,.do,.me,.chip[aria-pressed="true"]{box-shadow:0 10px 26px -12px color-mix(in srgb,var(--a1) 80%,transparent)}
+.acct{background:color-mix(in srgb,var(--glass) 60%,transparent);border-color:color-mix(in srgb,var(--a1) 25%,transparent)}
+.acct.on{background:var(--glass);border-color:var(--glass-b);box-shadow:var(--shadow),inset 0 1px 0 var(--hl)}
+.acct.on .ic{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff}
+.whydo{background:color-mix(in srgb,var(--a3) 45%,transparent)}
+.chip{background:color-mix(in srgb,var(--glass) 80%,transparent)}
+/* research board: one fact per row, readable */
+.box{padding:22px 24px}
+.box h3{font-family:var(--f);font-size:15px;font-weight:600;letter-spacing:-.01em;text-transform:none;color:var(--ink);margin:0 0 10px;align-items:center}
+.box h3 span{font-family:var(--fm);font-size:11px;font-weight:500;color:var(--a1);background:color-mix(in srgb,var(--a1) 10%,transparent);border-radius:999px;padding:1px 8px}
+.box h3 span:empty{display:none}
+.fact{display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding:14px 0}
+.fact.kv{grid-template-columns:96px minmax(0,1fr);gap:16px}
+.fact .k{font-size:13px;color:var(--muted);padding-top:2px}
+.fact .v{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fact .claim{font-size:15px;line-height:1.5;color:var(--ink);font-weight:450}
+.fact .src{font-family:var(--fm);font-size:11px;color:var(--faint);padding:0;white-space:normal}
+.facts .fact:not(.kv) .claim{padding-left:16px;position:relative}
+.facts .fact:not(.kv) .claim::before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,var(--a1),var(--a2))}
+.facts .fact:not(.kv) .src{padding-left:16px}
+.persona .nm{font-weight:400}
+.avatar{background:radial-gradient(circle at 30% 30%,var(--a2),var(--a1) 75%)}
 </style>
 </head>
 <body>
@@ -375,8 +417,6 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
 <header class="top">
   <div class="brand"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.6 2.2"/><circle cx="9" cy="9" r="2.6" fill="currentColor"/></svg>Meetble</div>
   <div class="top-r">
-    <span class="sample">SAMPLE DATA</span>
-    <button class="tbtn" id="evBtn" type="button" aria-expanded="false">Events</button>
     <button class="tbtn" id="resetBtn" type="button">Restart</button>
   </div>
 </header>
@@ -673,11 +713,11 @@ let orbPal = 0;
 
 /* ---------- accounts → tracks ---------- */
 const ACCTS = [
-  {key:'linkedin', ic:'in', nm:'LinkedIn', on:true},
-  {key:'x', ic:'X', nm:'X', on:true},
+  {key:'linkedin', ic:'in', nm:'LinkedIn', on:false},
+  {key:'x', ic:'X', nm:'X', on:false},
   {key:'email', ic:'@', nm:'Email', on:false},
-  {key:'luma', ic:'Lu', nm:'Luma', on:true},
-  {key:'calendar', ic:'Cal', nm:'Calendar', on:true, plan:true}, // your free time; not a research track
+  {key:'luma', ic:'Lu', nm:'Luma', on:false},
+  {key:'calendar', ic:'Cal', nm:'Calendar', on:false, plan:true}, // your free time; not a research track
 ];
 const NTRACKS = 6; // web + podcasts need only API keys, plus one per research account
 const isOn = k => ACCTS.find(a => a.key === k)?.on ?? true;
@@ -722,7 +762,6 @@ function emit(ev){
   $('#evlog').scrollTop = 1e6;
   ({step:onStep, finding:onFinding, actions:onActions, action_status:onStatus, browse:onBrowse})[ev.type]?.(ev);
 }
-$('#evBtn').addEventListener('click', e => { const hid = $('#evlog').hidden = !$('#evlog').hidden; e.target.setAttribute('aria-expanded', !hid); });
 
 const ICON = {
   done:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7.5" fill="var(--ink)"/><path d="M4.9 8.2l2.1 2.1 4.2-4.5" stroke="var(--bg)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -761,7 +800,7 @@ function onFinding(ev){
   $({persona:'#cntPersona', now:'#cntNow', prec:'#cntPrec'}[ev.section]).textContent = counts[ev.section];
   const host = ev.source_url ? ev.source_url.replace(/^https?:\/\/(www\.)?/,'').split('/')[0] : '';
   const d = document.createElement('div'); d.className = 'fact' + (ev.label ? ' kv' : '');
-  d.innerHTML = `${ev.label ? `<span class="k">${esc(ev.label)}</span>` : ''}<div>${esc(ev.claim)}</div>${host ? `<a class="src" href="${esc(ev.source_url)}" target="_blank" rel="noopener">${esc(host)} ↗</a>` : `<span class="src">${esc(ev.via)}</span>`}`;
+  d.innerHTML = `${ev.label ? `<span class="k">${esc(ev.label)}</span>` : ''}<div class="v"><div class="claim">${esc(ev.claim.replace(/ \(sample\)$/, ''))}</div>${host ? `<a class="src" href="${esc(ev.source_url)}" target="_blank" rel="noopener">${esc(host)} ↗</a>` : `<span class="src">${esc(ev.via)}</span>`}</div>`;
   const order = ['Role','Built','Talks about','Circle'], o = order.indexOf(ev.label); // tracks finish in any order
   d.dataset.o = o < 0 ? 99 : o;
   box.insertBefore(d, [...box.children].find(c => +c.dataset.o > +d.dataset.o) || null);
@@ -831,7 +870,6 @@ function renderActs(){
   $('#deck').className = 'deck' + (left <= 1 ? ' one' : left === 2 ? ' two' : '');
   $('#deck').innerHTML = a ? `
     <article class="dcard card ${dir ? 'in-' + dir : ''} ${a.late ? 'late' : ''}" aria-live="polite">
-      <div class="top"><span class="rank">Route ${cur + 1} of ${list.length}</span><div class="meta">${kindTag(a)}<span class="out ${a.out}">${OUT[a.out]}</span></div></div>
       <div class="pc">${num(pOf(a))}<sup>%</sup><span>chance this works</span></div>
       <h2>${esc(a.title)}</h2>
       <div class="pbar"><div class="trk"><i style="width:${pOf(a)*100}%"></i></div></div>
