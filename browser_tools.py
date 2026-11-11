@@ -8,6 +8,7 @@ Setup (once):
   Be logged in to luma.com and linkedin.com in that Chrome.
 
 Usage (each prints one JSON object, so the Next.js app can call it with child_process):
+  python browser_tools.py cookie-check                             # same answer from your Chrome's cookies, in seconds
   python browser_tools.py login-check                              # are Luma + LinkedIn signed in? (run first)
   python browser_tools.py luma-my-events                           # upcoming events I am registered for / hosting
   python browser_tools.py luma-check   https://luma.com/compiled-poy7
@@ -169,6 +170,57 @@ def login_check():
     )
 
 
+# Session cookies that only exist while signed in. Read straight from your Chrome over CDP: seconds, not minutes, no LLM.
+SESSION_COOKIES = {
+    "linkedin": (("linkedin.com",), ("li_at",), None),
+    "x": (("x.com", "twitter.com"), ("auth_token",), "twid"),
+    "instagram": (("instagram.com",), ("sessionid",), "ds_user_id"),
+    "luma": (("luma.com", "lu.ma"), ("luma.auth-session-key", "luma.auth-session", "luma.session"), None),
+}
+
+
+def cookies_to_status(cookies, now=None):
+    """[{name, domain, value, expires}] -> {site: {logged_in, account}} (same shape as login-check)."""
+    import time
+    now = now or time.time()
+    out = {}
+    for site, (domains, names, account_cookie) in SESSION_COOKIES.items():
+        mine = [c for c in cookies if any(str(c.get("domain", "")).lstrip(".").endswith(d) for d in domains)]
+        live = [c for c in mine if c.get("value") and (c.get("expires", -1) in (-1, 0) or c.get("expires", -1) > now)]
+        on = any(c.get("name") in names for c in live)
+        if site == "luma" and not on:  # Luma has renamed its cookie before: any live auth/session cookie counts
+            on = any("auth" in str(c.get("name", "")).lower() for c in live)
+        acct = ""
+        if on and account_cookie:
+            v = next((c["value"] for c in live if c.get("name") == account_cookie), "")
+            acct = ("id " + v.replace("u%3D", "").replace("u=", "")) if v else ""
+        out[site] = {"logged_in": bool(on), "account": acct}
+    return out
+
+
+def cookie_check():
+    """Fast sign-in check: asks your Chrome for its cookies over CDP (Storage.getCookies). Values never leave this process."""
+    cdp = your_chrome_cdp_url()
+    if not cdp:
+        return {"error": "Chrome remote debugging is off: open chrome://inspect/#remote-debugging, turn it on, click Allow"}
+    import websockets.asyncio.client as wsc
+
+    async def go():
+        async with wsc.connect(cdp, max_size=None) as ws:
+            await ws.send(json.dumps({"id": 1, "method": "Storage.getCookies", "params": {}}))
+            while True:
+                msg = json.loads(await ws.recv())
+                if msg.get("id") == 1:
+                    if "error" in msg:
+                        raise RuntimeError(msg["error"].get("message", "CDP error"))
+                    return msg["result"].get("cookies", [])
+
+    try:
+        return cookies_to_status(_asyncio.run(go()))
+    except Exception as e:
+        return {"error": f"cookie check failed: {e}"[:200]}
+
+
 def luma_my_events():
     return run(
         "Open https://luma.com/home (I am signed in to Luma). List the UPCOMING events I am registered for or hosting "
@@ -225,6 +277,7 @@ def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("login-check")
+    sub.add_parser("cookie-check")
     sub.add_parser("luma-my-events")
     sub.add_parser("luma-check").add_argument("url")
     sub.add_parser("luma-register").add_argument("url")
@@ -235,6 +288,8 @@ def main():
 
     if a.cmd == "login-check":
         out = login_check()
+    elif a.cmd == "cookie-check":
+        out = cookie_check()
     elif a.cmd == "luma-my-events":
         out = luma_my_events()
     elif a.cmd == "luma-check":
