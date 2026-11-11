@@ -1,0 +1,14 @@
+.git
+node_modules
+dist
+.venv
+venv
+out
+data
+logs
+runs
+.env
+.env.*
+user_profile.json
+*.zip
+docs/screenshots

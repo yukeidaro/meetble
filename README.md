@@ -79,6 +79,8 @@ From a real run on the local server (`node server.mjs`), target Garry Tan, with 
 
 ## Run it
 
+**In the cloud, for anyone:** sign in with Google, save your LinkedIn / X / Luma connections to your account, and run from any browser. See [DEPLOY.md](DEPLOY.md) (one script, Google Cloud Run).
+
 You need these in `.env` (copy `.env.example`):
 
 - `ANTHROPIC_API_KEY` (required)

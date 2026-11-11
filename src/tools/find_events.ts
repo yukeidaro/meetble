@@ -1,5 +1,6 @@
 import type { Target, ToolContext } from "../core/types.js";
 import type { ExaResult } from "./exa.js";
+import { fetchPublic, pinnedFetch } from "../core/public_fetch.js";
 import { clip, dedupeByUrl, failedNote, fold, haystack, hostOf, mentionsName, nameTokens, searchAll, toIsoDate } from "./resolve_target.js";
 
 // Step 2: upcoming events the target hosts / speaks at, between now and deadline + GRACE_DAYS.
@@ -131,7 +132,9 @@ async function fetchUserEvent(url: string, ctx: ToolContext): Promise<ExaResult 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), 10_000);
   try {
-    const res = await ctx.fetch(url, { method: "GET", headers: { accept: "text/html", "user-agent": "Mozilla/5.0 (Meetble research)" }, signal: ac.signal });
+    const init: RequestInit = { method: "GET", headers: { accept: "text/html", "user-agent": "Mozilla/5.0 (Meetble research)" }, signal: ac.signal };
+    // On the shared cloud server the link comes from a stranger: never let it (or a redirect) reach a private address.
+    const res = process.env.MEETBLE_PUBLIC_LINKS_ONLY === "1" ? await fetchPublic(url, init, pinnedFetch) : await ctx.fetch(url, init);
     if (!res.ok) return undefined;
     const { title, text } = htmlToText(await res.text());
     return { url, title: title ?? null, text };
