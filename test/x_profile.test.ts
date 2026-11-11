@@ -25,7 +25,7 @@ const goodJson = {
     { text: "Somebody else's post", date: "2026-11-07", url: "https://x.com/paulg/status/222" },
     { text: "Too old", date: "2026-08-01", url: "https://x.com/BorisJabes/status/333" },
     { text: "Future date", date: "2026-12-01", url: "https://x.com/BorisJabes/status/334" },
-    { text: "Uncited but well-formed, ISO time", date: "2026-10-01T15:00:00Z", url: "https://x.com/BorisJabes/status/444" },
+    { text: "Uncited but well-formed, ISO time", date: "2026-10-20T15:00:00Z", url: "https://x.com/BorisJabes/status/444" },
     { text: "", date: "2026-10-01", url: "https://x.com/BorisJabes/status/555" },
   ],
   inner_circle: [
@@ -53,16 +53,16 @@ describe("x_profile", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("sends handle + 60-day UTC window, no to_date", async () => {
+  it("sends handle + 30-day UTC window, no to_date", async () => {
     const { fetch, calls } = fakeFetch(() => ({ json: xaiResponse("{}") }));
     const { ctx } = makeCtx(fetch);
     await xProfile({ target }, ctx);
     expect(calls).toHaveLength(1);
     const body = calls[0]!.body;
     expect(body.model).toBe("grok-4.7");
-    expect(body.tools).toEqual([{ type: "x_search", allowed_x_handles: ["BorisJabes"], from_date: "2026-09-12" }]);
+    expect(body.tools).toEqual([{ type: "x_search", allowed_x_handles: ["BorisJabes"], from_date: "2026-10-12" }]);
     expect(body.input[0].content).toContain("@BorisJabes");
-    expect(body.input[0].content).toContain("2026-09-12");
+    expect(body.input[0].content).toContain("2026-10-12");
     expect(body.input[0].content).toContain("STRICT JSON");
   });
 
@@ -75,7 +75,7 @@ describe("x_profile", () => {
     expect(r.handle).toBe("BorisJabes");
     expect(r.posts).toEqual([
       { text: "Demo day is next week. Founders: tell the story.", date: "2026-11-09", url: "https://x.com/BorisJabes/status/111", cited: true },
-      { text: "Uncited but well-formed, ISO time", date: "2026-10-01", url: "https://x.com/BorisJabes/status/444", cited: false },
+      { text: "Uncited but well-formed, ISO time", date: "2026-10-20", url: "https://x.com/BorisJabes/status/444", cited: false },
     ]);
     expect(r.innerCircle).toEqual([{ handle: "garrytan", count: 11 }, { handle: "dalton", count: 4 }]);
     expect(r.topics).toEqual(["AI agents", "developer tools"]);
@@ -90,7 +90,7 @@ describe("x_profile", () => {
     const ic = f.filter((x) => x.kind === "inner_circle");
     expect(ic).toHaveLength(2);
     expect(ic.every((x) => x.source_url === "https://x.com/BorisJabes")).toBe(true);
-    expect(ic[0]!.claim).toBe("@BorisJabes replied to @garrytan 11 times in the last 60 days");
+    expect(ic[0]!.claim).toBe("@BorisJabes replied to @garrytan 11 times in the last 30 days");
     expect(summarizeXProfile(r)).toBe("2 posts, replies most to @garrytan, topics: AI agents, developer tools");
   });
 

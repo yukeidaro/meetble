@@ -10,9 +10,10 @@ import {
   ymdDaysAgo,
 } from "./xai.js";
 
-// Step 1: the target's own recent X activity (last 60 days) via Grok X Search, restricted to their handle.
+// Step 1: the target's own recent X activity (last 30 days) via Grok X Search, restricted to their handle.
 
-export const X_PROFILE_DAYS = 60;
+// 30 days and fewer items: the 60-day / 15-post ask timed out at 240 s on every live run.
+export const X_PROFILE_DAYS = 30;
 const TOOL = "x_profile";
 
 export interface XPost { text: string; date?: string; url: string; cited: boolean }
@@ -41,9 +42,9 @@ export function buildXProfilePrompt(handle: string, fromDate: string, today: str
     ` "inner_circle":[{"handle":"other_account_without_at","count":<number of replies from @${handle} to them>}],`,
     ` "topics":["topic they keep returning to"],`,
     ` "posting_hours_utc":[<integer hour 0-23 when they usually post, UTC>]}`,
-    `"posts": up to 15 recent ORIGINAL posts written by @${handle} (not reposts, not replies), newest first.`,
-    `"inner_circle": up to 10 accounts @${handle} replies to most often, sorted by count descending.`,
-    `"topics": up to 8 short topic labels. Use empty arrays when you find nothing.`,
+    `"posts": up to 8 recent ORIGINAL posts written by @${handle} (not reposts, not replies), newest first.`,
+    `"inner_circle": up to 5 accounts @${handle} replies to most often, sorted by count descending.`,
+    `"topics": up to 5 short topic labels. Use empty arrays when you find nothing.`,
     STRICT_JSON,
   ].join("\n");
 }

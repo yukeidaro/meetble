@@ -51,6 +51,8 @@ export interface BookingPage {
   live?: boolean;
   event_types?: string[];
   live_check?: "api" | "none";
+  /** Calendly API: profile active with at least one event type. Not proof of open slots. */
+  profile_active?: boolean;
 }
 
 export interface PaidPage {
@@ -355,7 +357,11 @@ export async function probe_booking_page(input: ProbeBookingInput, ctx: ToolCont
     const inactive = prof === null || !!(prof as { unavailability_reason?: unknown } | undefined)?.unavailability_reason;
     const names = Array.isArray(types) ? types.map((t) => (t as { name?: unknown })?.name).filter((n): n is string => typeof n === "string") : [];
     p.event_types = names;
-    p.live = !inactive && names.length > 0;
+    // An active profile with event types can still have no open slots (Yu: calendly.com/borisjabes is not in use, but
+    // the API shows it active with one "Personal" type). Open slots need the page itself, so "live" stays false
+    // until that is confirmed; profile_active records what the API did show.
+    p.profile_active = !inactive && names.length > 0;
+    p.live = false;
   }));
 
   // findings
@@ -367,7 +373,7 @@ export async function probe_booking_page(input: ProbeBookingInput, ctx: ToolCont
       claim: `${target.name} has a public booking page on ${p.platform} (${sourceText(p.source)}).`,
       source_url: p.url,
       confidence: confidenceOf.get(p.url) ?? "low",
-      data: { platform: p.platform, source: p.source, verified_name: p.verified_name, ...(p.live_check ? { live: p.live, event_types: p.event_types, live_check: p.live_check } : {}) },
+      data: { platform: p.platform, source: p.source, verified_name: p.verified_name, ...(p.live_check ? { live: p.live, profile_active: p.profile_active, event_types: p.event_types, live_check: p.live_check, slots_confirmed: false } : {}) },
     });
   }
   for (const p of paid) {
@@ -405,7 +411,9 @@ export function summarizeProbeBookingPage(r: ProbeBookingResult): string {
   if (strong.length) {
     const p = strong[0]!;
     const from = p.source === "bio" ? "from bio" : p.source === "search" ? "from search" : "URL guess, name on page";
-    const state = p.live === false ? ", inactive" : p.live && p.event_types?.length ? `, ${p.event_types.length} event type${p.event_types.length > 1 ? "s" : ""}: ${p.event_types.slice(0, 2).join(", ")}; open slots unknown` : "";
+    const state = p.profile_active && p.event_types?.length
+      ? `, ${p.event_types.length} event type${p.event_types.length > 1 ? "s" : ""}: ${p.event_types.slice(0, 2).join(", ")}; open slots not confirmed`
+      : p.live_check === "api" ? ", inactive" : "";
     parts.push(`found ${shortUrl(p.url)} (${from}${state})${strong.length > 1 ? ` +${strong.length - 1} more` : ""}`);
   } else if (r.pages.length) {
     parts.push(`no confirmed booking page; ${r.pages.length} unconfirmed hit${r.pages.length > 1 ? "s" : ""}`);
