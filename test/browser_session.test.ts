@@ -18,7 +18,7 @@ describe("loginCheck", () => {
   it("lists signed-out sites and flags a Luma account mismatch", async () => {
     const { run, calls } = runner('browser-use log\n{"luma":{"logged_in":true,"account":"other@example.com"},"linkedin":{"logged_in":true,"account":"Yu"},"x":{"logged_in":false,"account":""}}');
     const r = await loginCheck({}, ctx, { run, cwd, env: { ...env, LUMA_ACCOUNT: "me@example.com" } });
-    expect(calls[0]!.slice(-1)).toEqual(["login-check"]);
+    expect(calls[0]!.slice(-1)).toEqual(["cookie-check"]);
     expect(r.signed_out).toEqual(["x", "instagram"]); // instagram missing from output = not signed in
     expect(r.account_mismatch).toBe("Luma is signed in as other@example.com, expected me@example.com");
     expect(summarizeLoginCheck(r)).toBe("signed in: luma, linkedin; not signed in: x, instagram; Luma is signed in as other@example.com, expected me@example.com");
@@ -30,6 +30,17 @@ describe("loginCheck", () => {
     expect(r.signed_out).toEqual([]);
     expect(r.account_mismatch).toBeUndefined();
     expect(await loginCheck({}, ctx, { cwd: mkdtempSync(join(tmpdir(), "none-")), env: {} })).toMatchObject({ skipped: true });
+  });
+
+  it("falls back to the browser-use login-check when the cookie check fails", async () => {
+    const calls: string[] = [];
+    const run = async (_c: string, args: string[]) => {
+      calls.push(args.at(-1)!);
+      return args.at(-1) === "cookie-check" ? { code: 1, stdout: "", stderr: "boom" } : { code: 0, stdout: '{"luma":{"logged_in":true,"account":""}}', stderr: "" };
+    };
+    const r = await loginCheck({}, ctx, { run, cwd, env });
+    expect(calls).toEqual(["cookie-check", "login-check"]);
+    expect(r.sites?.luma?.logged_in).toBe(true);
   });
 
   it("throws on a browser error so the step shows as failed", async () => {
