@@ -10,6 +10,8 @@ We build AI agents that find the best way to reach out to people you want and do
 
 ## Screenshots
 
+From a real run on the local server (`node server.mjs`), target Garry Tan, with "Reuse the last research run" on.
+
 **1. Ask who you want to meet**\
 ![Start screen](docs/screenshots/1-ask.webp)
 
@@ -19,10 +21,10 @@ We build AI agents that find the best way to reach out to people you want and do
 **3. Watch the agent research**\
 ![Research in progress](docs/screenshots/3-research.webp)
 
-**4. Research board: profile and niche details**\
+**4. Research board: profile, summary, and niche details in his own words**\
 ![Research board](docs/screenshots/4-research-board.webp)
 
-**5. Action plan: ranked routes with their chances**\
+**5. Action plan: ranked routes, each with its % chance**\
 ![Action plan](docs/screenshots/5-action-plan.webp)
 
 ## How it works
