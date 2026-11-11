@@ -243,6 +243,15 @@ const send = (res, code, body, type = "application/json; charset=utf-8") => { re
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, "http://localhost");
   const p = url.pathname;
+  // The hosted UI (GitHub Pages) may call this local server. Only that origin, only from this computer (we bind 127.0.0.1).
+  const origin = req.headers.origin || "";
+  if (/^https:\/\/[a-z0-9-]+\.github\.io$/.test(origin)) {
+    res.setHeader("access-control-allow-origin", origin);
+    res.setHeader("access-control-allow-headers", "content-type");
+    res.setHeader("access-control-allow-private-network", "true");
+    res.setHeader("vary", "origin");
+  }
+  if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
   try {
     if (req.method === "GET" && (p === "/" || p === "/index.html")) return send(res, 200, readFileSync(join(ROOT, "ui", "index.html")), MIME[".html"]);
     if (p === "/api/health") return send(res, 200, { ok: true, has_dist: existsSync(join(ROOT, "dist", "cli.js")), has_research: existsSync(RESEARCH), has_profile: existsSync(join(ROOT, "user_profile.json")), has_env: existsSync(join(ROOT, ".env")) });
