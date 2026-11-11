@@ -713,7 +713,7 @@ async function refreshLogins(force){
     const r = await (await fetch(q('/api/logins' + (force ? '?refresh=1' : '')))).json();
     loginState = r;
     if(r.sites) for(const a of ACCTS) if(r.sites[a.key]) a.on = !!r.sites[a.key].logged_in;
-    $('#loginNote').textContent = r.error ? 'Could not check sign-ins: ' + r.error : r.skipped ? 'Sign-in check skipped: ' + (r.reason || '') : 'Click an account to sign in to it in a new tab, then come back here.';
+    $('#loginNote').textContent = r.error ? (/no result|DevToolsActivePort|connect|attach|CDP/i.test(r.error) ? 'Chrome isn\'t reachable yet: open chrome://inspect/#remote-debugging in this Chrome, turn remote debugging on (Allow), then press Re-check sign-ins.' : 'Could not check sign-ins: ' + r.error) : r.skipped ? 'Sign-in check skipped: ' + (r.reason || '') : 'Click an account to sign in to it in a new tab, then come back here.';
   }catch{ loginState = {}; $('#loginNote').textContent = 'Could not check sign-ins.'; }
   renderAccts();
 }
