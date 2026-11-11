@@ -82,11 +82,34 @@ class ActionResult(BaseModel):
 
 
 # ---------- runner ----------
+def your_chrome_cdp_url():
+    """The DevTools URL of the Chrome you are already using (remote debugging on), so the agent runs in YOUR
+    signed-in profile (your LinkedIn, Luma, X), never a fresh one. Chrome writes DevToolsActivePort when the
+    chrome://inspect/#remote-debugging toggle is on."""
+    if os.environ.get("MEETBLE_CDP_URL"):
+        return os.environ["MEETBLE_CDP_URL"]
+    local = os.environ.get("LOCALAPPDATA", "")
+    home = os.path.expanduser("~")
+    dirs = [os.path.join(local, "Google", "Chrome", "User Data"), os.path.join(local, "Google", "Chrome Dev", "User Data"),
+            os.path.join(local, "Google", "Chrome SxS", "User Data"),
+            os.path.join(home, "Library", "Application Support", "Google", "Chrome"), os.path.join(home, ".config", "google-chrome")]
+    for d in dirs:
+        f = os.path.join(d, "DevToolsActivePort")
+        if os.path.isfile(f):
+            lines = open(f, encoding="utf-8").read().split()
+            if len(lines) >= 2:
+                return f"ws://127.0.0.1:{lines[0]}{lines[1]}"
+    return None
+
+
 def run(task: str, schema):
+    cdp = your_chrome_cdp_url()
+    if not cdp:
+        return {"error": "Chrome remote debugging is off: open chrome://inspect/#remote-debugging, turn it on, click Allow"}
     agent = Agent(
         task,
         llm=ChatAnthropic(MODEL),
-        browser=Browser("chrome"),   # attaches to your open Chrome: your cookies, your logins
+        browser=Browser(cdp_url=cdp, keep_alive=True),  # YOUR running Chrome: your cookies and logins; never closed
         output_model_schema=schema,
     )
     # No timeout= here: browser-use 0.13.x (the newest on some feeds) rejects it. The Node caller kills us after 300 s.
