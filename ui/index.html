@@ -28,6 +28,10 @@
 
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+.details{display:grid;gap:8px;margin:18px auto 6px;max-width:560px}
+.details input:not([type]){font:inherit;font-size:13.5px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.details .reuse{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.details .mode{font-size:11.5px;color:var(--faint)}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:14px;line-height:1.55;overflow-x:hidden;
   -webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11";
@@ -457,6 +461,13 @@ body.s-run .aurora i{opacity:.4} body.s-run .aurora i:nth-child(n+2){opacity:.12
       <div class="pips" id="pips"></div>
       <span class="tracks" id="depthTracks"></span>
     </div>
+    <div class="details" id="details">
+      <input id="dHint" placeholder="Who they are, to tell same-name people apart (e.g. YC partner)" aria-label="Hint">
+      <input id="dX" placeholder="X handle (optional)" aria-label="X handle">
+      <input id="dEvent" placeholder="Event URL you are both at (optional)" aria-label="Event URL">
+      <label class="reuse"><input type="checkbox" id="dReuse"> Reuse the last research run (faster retake)</label>
+      <div class="mode" id="modeNote"></div>
+    </div>
     <button class="go" id="goBtn" type="button">Start research <span aria-hidden="true">→</span></button>
   </section>
 </main>
@@ -499,7 +510,7 @@ body.s-run .aurora i{opacity:.4} body.s-run .aurora i:nth-child(n+2){opacity:.12
     <div class="pane" id="paneResearch">
       <div class="box card">
         <h3>Profile <span id="cntPersona"></span></h3>
-        <div class="persona"><div class="avatar">BJ</div><div><div class="nm">Boris Jabes</div><div class="rl" id="role">Identifying…</div></div></div>
+        <div class="persona"><div class="avatar" id="avatar">BJ</div><div><div class="nm" id="tName">Boris Jabes</div><div class="rl" id="role">Identifying…</div></div></div>
         <div class="facts" id="f-persona"></div>
       </div>
       <div class="box card"><h3>Right now <span id="cntNow"></span></h3><div class="facts tl" id="f-now"><div class="wait-txt">Waiting for research…</div></div></div>
@@ -514,7 +525,7 @@ body.s-run .aurora i{opacity:.4} body.s-run .aurora i:nth-child(n+2){opacity:.12
           <div class="big" id="big">–</div>
         </div>
         <div class="tot-r">
-          <div class="cap"><b>Chances</b> by <b>tonight</b></div>
+          <div class="cap"><b>Chances</b> by <b id="byWhen">tonight</b></div><div class="sum" id="planSum"></div>
           <div class="filters" id="filters" aria-label="Filter by how you meet"></div>
         </div>
       </div>
@@ -765,7 +776,44 @@ function submitAsk(){
   document.body.className = 's-connect';
   bigOrb.set('busy'); setTimeout(() => bigOrb.set('idle'), 900);
 }
-$('#goBtn').addEventListener('click', () => { document.body.className = 's-run'; scrollTo(0,0); run(); });
+$('#goBtn').addEventListener('click', () => { document.body.className = 's-run'; scrollTo(0,0); LIVE ? runLive() : run(); });
+
+/* ---------- live mode: served by server.mjs, runs the real pipeline. Opened as a file (or ?demo=1) it plays the sample run. ---------- */
+let LIVE = false, es = null;
+(async () => {
+  if(!location.protocol.startsWith('http') || new URLSearchParams(location.search).has('demo')) { $('#modeNote').textContent = 'Preview mode: sample data, nothing is sent.'; return; }
+  try{
+    const h = await (await fetch('/api/health')).json(); LIVE = true;
+    const miss = [!h.has_dist && 'dist/ (run npm run build)', !h.has_env && '.env', !h.has_profile && 'user_profile.json'].filter(Boolean);
+    $('#modeNote').textContent = 'Live mode: runs the real research on this computer.' + (miss.length ? ' Missing: ' + miss.join(', ') : '');
+    $('#dReuse').disabled = !h.has_research;
+  }catch{ $('#modeNote').textContent = 'Server not reachable: preview mode with sample data.'; }
+})();
+function onMeta(ev){
+  if(ev.name){ $('#tName').textContent = ev.name; $('#avatar').textContent = ev.name.split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase(); }
+  if(ev.role !== undefined) $('#role').textContent = ev.role || 'Identified';
+  if(ev.deadline_label) $('#byWhen').textContent = ev.deadline_label;
+}
+async function runLive(){
+  const my = ++runId;
+  $('#meBubble').textContent = $('#saidText').textContent;
+  setState('Researching…', 'busy'); liveStart();
+  const body = { ask: $('#saidText').textContent, hint: $('#dHint').value.trim(), x_handle: $('#dX').value.trim(),
+    event_urls: $('#dEvent').value.trim() ? [$('#dEvent').value.trim()] : [], reuse: $('#dReuse').checked };
+  let id;
+  try{ id = (await (await fetch('/api/run', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)})).json()).id; }
+  catch(e){ setState('Could not reach the local server', 'idle'); liveStop('Stopped'); return; }
+  es?.close(); es = new EventSource('/api/stream?id=' + id);
+  es.onmessage = m => {
+    if(my !== runId){ es.close(); return; }
+    const ev = JSON.parse(m.data);
+    if(ev.type === 'end'){ es.close(); liveStop(`Done · ${live.n} steps`);
+      setState(actions.length ? 'Done. Swipe through your routes.' : 'Stopped. See the checklist for why.', 'done'); return; }
+    if(ev.type === 'meta') return onMeta(ev);
+    if(ev.type === 'actions' && ev.summary) $('#planSum').textContent = ev.summary;
+    emit(ev);
+  };
+}
 
 /* ---------- event stream: the UI renders only these six types ---------- */
 const log = [];
@@ -843,12 +891,13 @@ console.assert(Math.abs(total([{base:.3,rel:1,time:1,warm:1,chan:1},{base:.1,rel
 console.assert(pOf({base:.001,rel:1,time:1,warm:1,chan:1}) === .01 && pOf({base:2,rel:1,time:1,warm:1,chan:1}) === .9, 'clip');
 
 const OUT = {call:'15-min call', reply:'Reply', face:'In-person hello'};
-let actions = [], filter = 'all', confirmFirst = true, openConfirm = null, cur = 0, dir = '';
+let pTotal = null, actions = [], filter = 'all', confirmFirst = true, openConfirm = null, cur = 0, dir = '';
 const status = {};
 const num = p => p < .1 ? (p*100).toFixed(1) : String(Math.round(p*100));
 const vis = () => actions.filter(a => filter === 'all' || a.out === filter);
 
 function onActions(ev){
+  pTotal = typeof ev.p_total === 'number' ? ev.p_total : null;
   actions = ev.actions.slice().sort((a,b) => pOf(b) - pOf(a));
   cur = 0; dir = 'r';
   $('#tabPlan').disabled = false; $('#planCnt').textContent = actions.length;
@@ -864,7 +913,7 @@ $('#filters').addEventListener('click', e => { const b = e.target.closest('[data
 function control(a){
   const st = status[a.id], locked = a.acct && !isOn(a.acct);
   if(st) return statusPill(st);
-  return `<button class="do big" type="button" data-do="${a.id}" ${a.late||locked?'disabled':''}>${locked ? 'Link ' + acctName(a.acct) + ' first' : a.late ? 'Too slow for the deadline' : esc(a.cta)}</button>`;
+  return `<button class="do big" type="button" data-do="${a.id}" ${a.late||locked?'disabled':''}>${locked ? 'Link ' + acctName(a.acct) + ' first' : a.late ? esc(a.lateText || 'Too slow for the deadline') : esc(a.cta)}</button>`;
 }
 function confirmBox(a){
   if(openConfirm !== a.id) return '';
@@ -894,7 +943,7 @@ function renderActs(){
   dir = '';
   $('#dots').innerHTML = list.map((x,i) => `<button type="button" class="${i === cur ? 'on' : ''} ${status[x.id] ? 'done' : ''}" data-go="${i}" aria-label="Route ${i+1}"></button>`).join('');
   $('#prevBtn').disabled = cur <= 0; $('#nextBtn').disabled = cur >= list.length - 1;
-  const doable = list.filter(x => !x.late), t = doable.length ? total(doable) : 0;
+  const doable = list.filter(x => !x.late), t = filter === 'all' && pTotal !== null ? pTotal : doable.length ? total(doable) : 0; // live: the Python total (deadline + budget)
   $('#big').innerHTML = doable.length ? `${num(t)}<sup>%</sup>` : '–';
   $('#ringV').style.strokeDashoffset = 276.5 * (1 - t);
 }
@@ -930,8 +979,19 @@ $('#panePlan').addEventListener('click', async e => {
 });
 
 function onStatus(ev){ status[ev.id] = ev; renderActs(); }
+async function executeLive(a){
+  const t = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+  let copied = false;
+  if(a.draft){ try{ await navigator.clipboard.writeText(a.draft); copied = true; }catch{} }
+  if(a.url) window.open(a.url, '_blank', 'noopener');
+  const note = [copied ? 'draft copied' : a.draft ? 'copy the draft from the card' : '', a.url ? 'link opened' : ''].filter(Boolean).join(', ') || 'added to your plan';
+  emit({type:'step', id:'x-'+a.id, group:'Step 6 · Execution', label:a.title, status:'done', note: note + (a.draft ? '; you press send' : '')});
+  emit({type:'action_status', id:a.id, s: a.draft || a.url ? 'waiting' : 'done', t, note: a.doneNote || ''});
+  toast(copied ? 'Draft copied. Paste it and send it yourself.' : note);
+}
 async function execute(id){
   const a = actions.find(x => x.id === id), via = a.acct ? acctName(a.acct) : null;
+  if(LIVE) return executeLive(a);
   setState('Working on it…', 'busy');
   emit({type:'step', id:'x-'+id, group:'Step 6 · Execution', label:a.doWhat, status:'running', via});
   emit({type:'action_status', id, s:'running'});
@@ -1129,7 +1189,8 @@ function buildActions(a1, a2, a3){
 
 /* ---------- restart ---------- */
 $('#resetBtn').addEventListener('click', () => {
-  runId++; log.length = 0; actions = []; filter = 'all'; openConfirm = null; cur = 0;
+  runId++; es?.close(); if(LIVE) fetch('/api/stop', {method:'POST'}).catch(() => {}); $('#planSum').textContent = '';
+  log.length = 0; actions = []; filter = 'all'; openConfirm = null; cur = 0;
   Object.keys(status).forEach(k => delete status[k]); Object.keys(groups).forEach(k => delete groups[k]);
   counts.persona = counts.now = counts.prec = 0;
   $('#list').innerHTML = ''; $('#evlog').textContent = '';

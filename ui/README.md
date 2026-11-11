@@ -1,6 +1,8 @@
 # Meetble UI (prototype)
 
-Open `index.html` in a browser. It runs on sample data (Boris Jabes) so the flow can be demoed without the backend.
+Live: run `node server.mjs` in the repo root and open http://localhost:8787. The UI then runs the real pipeline (Steps 0–2 Node CLI, Steps 3–5 Python) and draws its output.
+
+Preview: open `index.html` straight from disk (or add `?demo=1`). It runs on sample data (Boris Jabes) so the flow can be demoed without the backend.
 
 Flow: type who and by when → link accounts → live research → swipe the ranked action cards → "do it" (with an optional confirm step).
 
@@ -18,3 +20,5 @@ The UI only draws these events. The sample run in `index.html` (`run()`) emits t
 | `action_status` | `id`, `s` (`running`/`done`/`waiting`), `t`, `note` | the status on a card |
 
 The orb is a port of the Lock-in Orb renderer (github.com/graceclara/lockinorb).
+
+In live mode `server.mjs` also sends `meta` (`name`, `role`, `deadline_label`) and `end`, and `actions` carries `p_total` and `summary` from `out/plan.json`.
