@@ -28,6 +28,13 @@ describe("fetchPublic", () => {
     const f = async (u: string) => u.includes("luma.com") ? new Response(null, { status: 301, headers: { location: "http://[::ffff:7f00:1]/" } }) : new Response("secret");
     await expect(fetchPublic("https://luma.com/x", {}, f, dns({ "luma.com": "104.18.1.1" }))).rejects.toThrow(/not a public/);
   });
+  it("stops waiting on DNS when the deadline passes", async () => {
+    const ac = new AbortController();
+    const never = () => new Promise<string[]>(() => {});
+    const p = fetchPublic("https://slow.example/", { signal: ac.signal }, async () => new Response("ok"), never);
+    ac.abort(new Error("deadline"));
+    await expect(p).rejects.toThrow(/deadline/);
+  });
   it("refuses IP-literal links to private ranges", async () => {
     await expect(fetchPublic("http://[::1]/", {}, async () => new Response("ok"))).rejects.toThrow(/not a public/);
   });
@@ -37,5 +44,15 @@ describe("pinnedFetch", () => {
   it("refuses to connect to a host that resolves to loopback", async () => {
     const { pinnedFetch } = await import("../src/core/public_fetch.js");
     await expect(pinnedFetch("http://localhost:9/")).rejects.toThrow(/not a public/);
+  });
+  it("turns a status Response() refuses into a rejection", async () => {
+    const { createServer } = await import("node:net");
+    const { pinnedFetch } = await import("../src/core/public_fetch.js");
+    const srv = createServer((s) => s.end("HTTP/1.1 600 Weird\r\ncontent-length: 0\r\n\r\n"));
+    await new Promise<void>((r) => srv.listen(0, "127.0.0.1", r));
+    const port = (srv.address() as { port: number }).port;
+    // 127.0.0.1 is an IP literal (no lookup), so the guard isn't in play here: this checks only the status handling.
+    await expect(pinnedFetch(`http://127.0.0.1:${port}/`)).rejects.toThrow();
+    srv.close();
   });
 });

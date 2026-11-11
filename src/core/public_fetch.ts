@@ -19,6 +19,17 @@ export function isPrivateAddress(ip: string): boolean {
 }
 
 type Resolve = (host: string) => Promise<string[]>;
+
+/** Reject as soon as the signal aborts, even while `p` (e.g. a DNS lookup) is still pending. */
+function abortable<T>(p: Promise<T>, signal?: AbortSignal | null): Promise<T> {
+  if (!signal) return p;
+  signal.throwIfAborted();
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason ?? new Error("aborted"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    p.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
+  });
+}
 const resolveAll: Resolve = async (host) => (await lookup(host, { all: true, verbatim: true })).map((a) => a.address);
 
 /**
@@ -32,7 +43,8 @@ export async function fetchPublic(url: string, init: RequestInit, fetchImpl: Fet
     const u = new URL(current);
     if (!/^https?:$/.test(u.protocol) || u.username || u.password) throw new Error("blocked: not a public http(s) link");
     const host = u.hostname.replace(/^\[|\]$/g, "");
-    const addrs = isIP(host) ? [host] : await resolve(host);
+    init.signal?.throwIfAborted();
+    const addrs = isIP(host) ? [host] : await abortable(resolve(host), init.signal);
     if (!addrs.length || addrs.some(isPrivateAddress)) throw new Error(`blocked: ${host} is not a public address`);
     const res = await fetchImpl(current, { ...init, redirect: "manual" });
     const loc = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
@@ -60,8 +72,9 @@ export const pinnedFetch: FetchLike = async (input, init = {}) => {
       (opts as { all?: boolean }).all ? cb(null, list) : cb(null, list[0]!.address, list[0]!.family);
     });
   const headers = Object.fromEntries(new Headers(init.headers as HeadersInit | undefined).entries());
+  init.signal?.throwIfAborted();
   return await new Promise<Response>((resolve, reject) => {
-    const req = (u.protocol === "https:" ? httpsRequest : httpRequest)(u, { method: init.method || "GET", headers, lookup: guardedLookup as never }, (res) => {
+    const req = (u.protocol === "https:" ? httpsRequest : httpRequest)(u, { method: init.method || "GET", headers, lookup: guardedLookup as never, ...(init.signal ? { signal: init.signal } : {}) }, (res) => {
       const chunks: Buffer[] = [];
       let size = 0;
       res.on("data", (c: Buffer) => { size += c.length; if (size > 5_000_000) { req.destroy(new Error("page too large")); return; } chunks.push(c); });
@@ -69,12 +82,12 @@ export const pinnedFetch: FetchLike = async (input, init = {}) => {
         const h = new Headers();
         for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) h.set(k, Array.isArray(v) ? v.join(", ") : String(v));
         const status = res.statusCode || 500;
-        resolve(new Response([101, 204, 205, 304].includes(status) ? null : Buffer.concat(chunks), { status, headers: h }));
+        try { resolve(new Response([101, 204, 205, 304].includes(status) ? null : Buffer.concat(chunks), { status, headers: h })); }
+        catch (e) { reject(e); } // e.g. a status Response() refuses (600): fail this page, not the whole run
       });
       res.on("error", reject);
     });
     req.on("error", reject);
-    init.signal?.addEventListener("abort", () => req.destroy(new Error("aborted")), { once: true });
     req.end();
   });
 };
