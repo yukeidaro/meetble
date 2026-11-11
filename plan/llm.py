@@ -12,9 +12,20 @@ import urllib.error
 import urllib.request
 
 API_URL = "https://api.anthropic.com/v1/messages"
-MODEL = os.environ.get("HF_MODEL", "claude-opus-5-5")
-EFFORT = os.environ.get("HF_EFFORT", "medium")  # low | medium | high
-TIMEOUT_S = int(os.environ.get("HF_TIMEOUT_S", "240"))
+# Settings are read at call time, so values that load_env() reads from .env apply.
+def _model():
+    return os.environ.get("HF_MODEL", "claude-opus-5-5")
+
+
+def _effort():
+    return os.environ.get("HF_EFFORT", "medium")  # low | medium | high
+
+
+def _timeout():
+    try:
+        return max(30, int(os.environ.get("HF_TIMEOUT_S", "240")))
+    except ValueError:
+        return 240
 
 
 def load_env(start_dir=None):
@@ -23,16 +34,16 @@ def load_env(start_dir=None):
     while True:
         p = os.path.join(d, ".env")
         if os.path.isfile(p):
-            with open(p, encoding="utf-8-sig") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-                    k, v = line.split("=", 1)
-                    k = k.strip().removeprefix("export ").strip()
-                    v = v.strip().strip('"').strip("'")
-                    if k and k not in os.environ:
-                        os.environ[k] = v
+            from .common import read_text  # handles UTF-16 files made by PowerShell 5
+            for line in read_text(p).splitlines():
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k = k.strip().removeprefix("export ").strip()
+                v = v.strip().strip('"').strip("'")
+                if k and k not in os.environ:
+                    os.environ[k] = v
             return p
         parent = os.path.dirname(d)
         if parent == d:
@@ -59,9 +70,10 @@ def _post(body):
         method="POST",
     )
     last = None
+    timeouts = 0
     for attempt in range(4):
         try:
-            with urllib.request.urlopen(req, timeout=TIMEOUT_S) as r:
+            with urllib.request.urlopen(req, timeout=_timeout()) as r:
                 return json.loads(r.read().decode("utf-8"))
         except urllib.error.HTTPError as e:
             detail = e.read().decode("utf-8", "replace")[:800]
@@ -72,10 +84,14 @@ def _post(body):
             raise LLMError(f"HTTP {e.code}: {detail}") from None
         except (urllib.error.URLError, TimeoutError, ConnectionError, OSError) as e:
             last = LLMError(f"network error: {e}")
-            timed_out = isinstance(e, TimeoutError) or "timed out" in str(e)
-            if attempt < (1 if timed_out else 3):  # a timed-out call is billed; retry it once only
+            if isinstance(e, TimeoutError) or "timed out" in str(e):
+                timeouts += 1
+                if timeouts >= 2:  # a timed-out call may still be billed: at most one retry
+                    raise last from None
+            if attempt < 3:
                 time.sleep(2 ** (attempt + 1))
                 continue
+            raise last from None
     raise last
 
 
@@ -103,20 +119,38 @@ def _parse_json(text):
         raise
 
 
+def _checked(out, schema):
+    """Reject output that is not an object with the schema's top-level keys (never report an empty success)."""
+    if not isinstance(out, dict):
+        raise LLMError(f"model returned {type(out).__name__}, expected a JSON object")
+    missing = [k for k in schema.get("required", []) if k not in out]
+    if missing:
+        raise LLMError(f"model output is missing {missing}")
+    for k, sub in schema.get("properties", {}).items():
+        want = sub.get("type")
+        if want == "array" and not isinstance(out.get(k), list):
+            raise LLMError(f"model output field {k!r} is not a list")
+        if want == "object" and not isinstance(out.get(k), dict):
+            raise LLMError(f"model output field {k!r} is not an object")
+    return out
+
+
 def call_json(system, user, schema, max_tokens=16000):
     base = {
-        "model": MODEL,
+        "model": _model(),
         "max_tokens": max_tokens,
         "system": system,
         "messages": [{"role": "user", "content": user}],
         "thinking": {"type": "adaptive"},
     }
-    body = dict(base, output_config={"effort": EFFORT, "format": {"type": "json_schema", "schema": schema}})
+    body = dict(base, output_config={"effort": _effort(), "format": {"type": "json_schema", "schema": schema}})
     try:
-        return _parse_json(_text_of(_post(body)))
+        return _checked(_parse_json(_text_of(_post(body))), schema)
     except LLMError as e:
         if "HTTP 400" not in str(e):
             raise
+    except ValueError:
+        pass  # unparsable JSON: try once more without the schema
         # Schema or effort not accepted: fall back to plain JSON instructions.
     body = dict(base)
     body["messages"] = [{
@@ -124,4 +158,7 @@ def call_json(system, user, schema, max_tokens=16000):
         "content": user + "\n\nReturn only one JSON object that matches this JSON Schema, no prose:\n"
         + json.dumps(schema),
     }]
-    return _parse_json(_text_of(_post(body)))
+    try:
+        return _checked(_parse_json(_text_of(_post(body))), schema)
+    except ValueError as e:  # JSONDecodeError
+        raise LLMError(f"model did not return valid JSON: {e}") from None

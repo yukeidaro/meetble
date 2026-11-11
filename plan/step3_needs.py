@@ -46,7 +46,11 @@ If evidence is thin, say so in the hypothesis and lower confidence; do not pad."
 
 def run(state, profile):
     emit(3, "Guess what they want and when they are free", "running")
-    out = llm.call_json(SYSTEM, context_block(state, profile) + "\n" + TASK, SCHEMA)
+    from .step5_actions import live_booking_urls
+    live = live_booking_urls(state)
+    note = (f"Booking pages verified as live: {live}." if live else
+            "No booking page was verified as live: if one is listed, call it 'found but not verified as in use', never 'verified'.")
+    out = llm.call_json(SYSTEM, context_block(state, profile) + "\n" + note + "\n" + TASK, SCHEMA)
     out = scrub(out)
     known = finding_ids(state)
 

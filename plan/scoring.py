@@ -46,16 +46,24 @@ def score_action(a, days_left=None, budget_jpy=None):
     a["cost_jpy"] = max(0, int(clamp(a.get("cost_jpy"), 0, 1e9)))
     a["hours"] = round(clamp(a.get("hours"), 0, 1000), 1)
     a["days_to_outcome"] = round(clamp(a.get("days_to_outcome"), 0, 365), 1)
-    a["fits_deadline"] = days_left is None or (days_left >= 0 and a["days_to_outcome"] <= max(days_left, 0.5))
+    a["fits_deadline"] = days_left is None or (days_left > 0 and a["days_to_outcome"] <= days_left)
     a["fits_budget"] = budget_jpy is None or a["cost_jpy"] <= budget_jpy
     return a
 
 
-def total_chance(actions):
-    """Chance at least one action works by the deadline: 1 - prod(1 - p_i), over actions that fit."""
-    miss = 1.0
-    for a in actions:
-        if a.get("fits_deadline", True) and a.get("fits_budget", True):
+def total_chance(actions, budget_jpy=None):
+    """Chance at least one action works by the deadline: 1 - prod(1 - p_i).
+    Counts actions that fit the deadline, best first, while their combined cost stays within budget.
+    Sets a["in_total"] on every action."""
+    miss, spent = 1.0, 0
+    for a in sorted(actions, key=lambda x: -x["p"]):
+        ok = a.get("fits_deadline", True) and a.get("fits_budget", True)
+        cost = a.get("cost_jpy", 0) or 0
+        if ok and budget_jpy is not None and spent + cost > budget_jpy:
+            ok = False
+        a["in_total"] = ok
+        if ok:
+            spent += cost
             miss *= 1.0 - a["p"]
     return round(1.0 - miss, 4)
 

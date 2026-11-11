@@ -1,6 +1,7 @@
 """Shared helpers: checklist output, state I/O, profile scrubbing, prompt context."""
 import datetime as dt
 import json
+import math
 import os
 import re
 import sys
@@ -41,25 +42,34 @@ N = {"type": "number"}
 I = {"type": "integer"}
 
 
+def read_text(path):
+    """Read UTF-8 (with or without BOM) or UTF-16 (PowerShell 5 `>` / Out-File default)."""
+    with open(path, "rb") as f:
+        raw = f.read()
+    if raw[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        return raw.decode("utf-16")
+    return raw.decode("utf-8-sig")
+
+
 def read_json(path):
-    with open(path, encoding="utf-8-sig") as f:  # -sig: PowerShell 5 writes a BOM
-        return json.load(f)
+    return json.loads(read_text(path))
 
 
 def write_json(path, data):
     d = os.path.dirname(os.path.abspath(path))
     os.makedirs(d, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    text = json.dumps(data, ensure_ascii=False, indent=2)  # build first: a failure can't truncate the file
+    with open(path, "w", encoding="utf-8", errors="replace") as f:
+        f.write(text)
 
 
 # ---------- outward-facing text rules ----------
 # Anything shown on screen or sent out must not name Yu's former employer.
 # Root-cause fix: the model never sees the name, so it can't write it.
 _EMPLOYER = [
-    (re.compile(r"日本マイクロソフト"), "a global big-tech company's Japan office"),
+    (re.compile(r"日本マイクロソフト"), "a global big-tech company"),
     (re.compile(r"マイクロソフト"), "a global big-tech company"),
-    (re.compile(r"Microsoft Japan", re.I), "a global big-tech company's Japan office"),
+    (re.compile(r"Microsoft Japan", re.I), "a global big-tech company"),
     (re.compile(r"Microsoft's", re.I), "a global big-tech company's"),
     (re.compile(r"Microsoft", re.I), "a global big-tech company"),
 ]
@@ -68,13 +78,15 @@ _EMPLOYER = [
 def scrub(value):
     """Recursively replace the former employer's name in strings."""
     if isinstance(value, str):
+        if value.startswith(("http://", "https://")):
+            return value  # keep source links working; they are citations, not prose
         for rx, rep in _EMPLOYER:
             value = rx.sub(rep, value)
         return value
     if isinstance(value, list):
         return [scrub(v) for v in value]
     if isinstance(value, dict):
-        return {k: scrub(v) for k, v in value.items()}
+        return {scrub(k) if isinstance(k, str) else k: scrub(v) for k, v in value.items()}
     return value
 
 
@@ -88,13 +100,19 @@ def num(x, default=0.0):
     if isinstance(x, bool):
         return default
     if isinstance(x, (int, float)):
-        return float(x) if x == x else default
+        try:
+            x = float(x)
+        except OverflowError:
+            return default
+        return x if math.isfinite(x) else default
     if isinstance(x, str):
         t = x.strip().replace(",", "").replace("\u00a5", "").replace("$", "")
         pctv = t.endswith("%")
         try:
             v = float(t.rstrip("%"))
         except ValueError:
+            return default
+        if not math.isfinite(v):
             return default
         return v / 100 if pctv else v
     return default
@@ -143,8 +161,10 @@ def finding_ids(state):
 
 
 def keep_known(ids, known):
-    """Drop evidence ids the model invented."""
-    return [i for i in (ids or []) if i in known]
+    """Drop evidence ids the model invented (and anything that isn't an id string)."""
+    if not isinstance(ids, list):
+        return []
+    return [i for i in ids if isinstance(i, str) and i in known]
 
 
 def _short(s, n):
@@ -187,27 +207,40 @@ def days_until(deadline):
         return None
     s = str(deadline).strip()
     low = s.lower()
+    def to_end_of(day):
+        end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time())
+        return round((end - dt.datetime.now()).total_seconds() / 86400, 3)
+
     if low in ("today", "tonight", "now"):
-        return 0
+        return to_end_of(dt.date.today())
     if low == "tomorrow":
-        return 1
+        return to_end_of(dt.date.today() + dt.timedelta(days=1))
     try:
         t = dt.datetime.fromisoformat(s.replace("Z", "+00:00"))
     except ValueError:
         t = None
     if t is not None and (len(s) > 10):
         now = dt.datetime.now(t.tzinfo) if t.tzinfo else dt.datetime.now()
-        return round((t - now).total_seconds() / 86400, 2)
+        return round((t - now).total_seconds() / 86400, 3)
     try:
         d = dt.date.fromisoformat(s[:10])
     except ValueError:
         return None
-    return (d - dt.date.today()).days
+    return to_end_of(d)
 
 
 SHARED_RULES = (
     "Rules: work only from the findings and the user profile given; cite finding ids exactly as given; "
     "never invent facts, quotes, people or URLs. Write in English. "
-    "Never name the user's former employer; describe it as 'a global big-tech company' if needed. "
+    "Never name or hint at the user's former employer: call it only 'a global big-tech company', never say which "
+    "country office, and never point out that the user and the target share an employer or career history there. "
     "Respect the profile's 'sensitivities'. Stay on public professional information."
 )
+
+
+def scrub_output(state):
+    """Scrub everything we write, except the raw findings (facts about the target, e.g. their own past jobs)."""
+    findings = state.get("findings", [])
+    out = scrub({k: v for k, v in state.items() if k != "findings"})
+    out["findings"] = findings
+    return out

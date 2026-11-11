@@ -42,13 +42,33 @@ def _ranges_text():
     return f"Base-rate ranges by type:\n{b}\nMultiplier ranges (1.0 = neutral):\n{m}"
 
 
+LIVE_KEYS = ("live", "is_live", "active", "in_use")
+UNVERIFIED_BOOKING_CAP = 0.05
+
+
+def live_booking_urls(state):
+    """Booking pages the research verified as in use. A page that merely exists (e.g. a dead Calendly) doesn't count."""
+    urls = []
+    for b in state.get("booking_pages") or []:
+        if not isinstance(b, dict):
+            continue
+        if any(b.get(k) is True for k in LIVE_KEYS) or str(b.get("status", "")).lower() == "live":
+            urls.append(b.get("url", ""))
+    return urls
+
+
 def run(state, profile):
     emit(5, "Rank the actions with a % each", "running")
     goal = state.get("goal", {})
     days_left = days_until(goal.get("deadline"))
     budget = num(goal.get("budget_jpy"), None) if goal.get("budget_jpy") not in (None, "") else None
 
-    task = f"""Propose 6-10 actions to reach the target by the deadline (days left: {days_left if days_left is not None else "unknown"}).
+    live = live_booking_urls(state)
+    booking_note = (f"Verified live booking pages: {live}." if live else
+                    "No booking page was verified as live (a page that exists may be unused). "
+                    "Do not make booking_page the main route; if you include it, say it must be checked first.")
+    task = f"""{booking_note}
+Propose 6-10 actions to reach the target by the deadline (days left: {days_left if days_left is not None else "unknown"}).
 Action types:
 - referral: ask someone in the user's network who knows the target; draft the ask plus a forwardable blurb
 - booking_page: book a slot on a public booking page found in the research
@@ -94,7 +114,13 @@ summary: one sentence on the best route."""
             a["need_id"] = ""
         a["status"] = "proposed"
         a["_src_index"] = idx
-        actions.append(score_action(a, days_left, budget))
+        a = score_action(a, days_left, budget)
+        if a["type"] == "booking_page" and not live:
+            a["p"] = round(min(a["p"], UNVERIFIED_BOOKING_CAP), 4)
+            a.setdefault("flags", []).append("booking page not verified as live: capped at 5%")
+            if "unverified" not in a["title"].lower():
+                a["title"] += " (unverified page)"
+        actions.append(a)
 
     actions.sort(key=lambda a: (not (a["fits_deadline"] and a["fits_budget"]), -a["p"]))
     src_to_id = {}
@@ -113,11 +139,12 @@ summary: one sentence on the best route."""
     state["actions"] = actions
     state["sequence"] = seq
     state["plan_summary"] = text(out.get("summary"))
-    state["p_total"] = total_chance(actions)
-    state["p_total_note"] = "1 - product(1 - p) over actions that fit the deadline and budget; assumes the actions are independent."
+    state["p_total"] = total_chance(actions, budget)
+    state["p_total_note"] = ("1 - product(1 - p) over actions that fit the deadline, best first, "
+                             "while their combined cost stays within budget; assumes the actions are independent.")
 
     for a in actions:
-        flag = "" if a["fits_deadline"] and a["fits_budget"] else (" · too late" if not a["fits_deadline"] else " · over budget")
+        flag = "" if a.get("in_total") else (" · too late" if not a["fits_deadline"] else " · over budget")
         emit(5, f"{pct(a['p']):>4}  {a['title'][:80]}", "done",
              f"¥{a['cost_jpy']:,} · {a['hours']}h · {a['days_to_outcome']}d{flag}")
     if contains_employer(actions):  # should never happen; scrub() runs on the model output

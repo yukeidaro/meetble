@@ -143,7 +143,7 @@ class PlanTests(unittest.TestCase):
             self.assertEqual(s["goal"]["target"], "X")
 
     def test_days_until(self):
-        self.assertEqual(common.days_until("tonight"), 0)
+        self.assertTrue(0 < common.days_until("tonight") <= 1)  # time left today
         self.assertIsNone(common.days_until("someday"))
         self.assertLess(common.days_until("2000-01-01"), 0)  # passed deadline is negative
         self.assertIsInstance(common.days_until("2099-01-01T22:45:00+08:00"), float)
@@ -217,3 +217,107 @@ class RobustnessTests(unittest.TestCase):
                 rc = cli.main([SAMPLE, "--out", out, "--no-interview"])
             self.assertEqual(rc, 2)
             self.assertTrue(os.path.isfile(out))
+
+
+class CopilotReviewTests(unittest.TestCase):
+    """Cases from the GPT 6.1 review; each pins a root-cause fix."""
+
+    def test_timeout_retried_once_only(self):
+        calls = []
+        orig_open, orig_sleep = llm.urllib.request.urlopen, llm.time.sleep
+        def slow(*a, **k):
+            calls.append(1)
+            raise TimeoutError("timed out")
+        llm.urllib.request.urlopen, llm.time.sleep = slow, lambda s: None
+        os.environ["ANTHROPIC_API_KEY"] = os.environ.get("ANTHROPIC_API_KEY") or "test"
+        try:
+            with self.assertRaises(llm.LLMError):
+                llm._post({})
+        finally:
+            llm.urllib.request.urlopen, llm.time.sleep = orig_open, orig_sleep
+        self.assertEqual(len(calls), 2)
+
+    def test_settings_read_at_call_time(self):
+        os.environ["HF_EFFORT"] = "low"
+        try:
+            self.assertEqual(llm._effort(), "low")
+        finally:
+            del os.environ["HF_EFFORT"]
+
+    def test_utf16_files(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "r.json")
+            with open(p, "w", encoding="utf-16") as f:
+                f.write('{"goal": {"target_name": "B"}}')
+            self.assertEqual(common.read_json(p)["goal"]["target_name"], "B")
+
+    def test_malformed_model_output_is_an_error(self):
+        schema = step5_actions.SCHEMA
+        for bad in (None, {}, [], {"actions": 1, "sequence": [], "summary": ""}):
+            with self.assertRaises(llm.LLMError):
+                llm._checked(bad, schema)
+
+    def test_budget_is_cumulative(self):
+        acts = [scoring.score_action({"type": "paid_consult", "base_rate": 0.6, "cost_jpy": 30000, "evidence": ["f1"]}, 5, 30000),
+                scoring.score_action({"type": "paid_consult", "base_rate": 0.6, "cost_jpy": 30000, "evidence": ["f1"]}, 5, 30000)]
+        self.assertAlmostEqual(scoring.total_chance(acts, 30000), 0.6)
+        self.assertEqual(sorted(a["in_total"] for a in acts), [False, True])
+
+    def test_no_half_day_allowance(self):
+        a = scoring.score_action({"type": "event", "evidence": ["f1"], "days_to_outcome": 0.4}, days_left=0.1)
+        self.assertFalse(a["fits_deadline"])
+
+    def test_non_finite_numbers(self):
+        for x in ("NaN", "inf", float("nan"), float("inf"), 10 ** 400):
+            self.assertEqual(common.num(x), 0.0)
+
+    def test_keys_scrubbed_urls_kept(self):
+        out = common.scrub({"Microsoft note": "https://devblogs.microsoft.com/x", "t": "at Microsoft"})
+        self.assertEqual(out["a global big-tech company note"], "https://devblogs.microsoft.com/x")
+        self.assertNotIn("Microsoft", out["t"])
+
+    def test_out_md_does_not_overwrite_json(self):
+        llm_orig = llm.call_json
+        llm.call_json = fake_call_json
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                out = os.path.join(d, "result.md")
+                with redirect_stdout(io.StringIO()):
+                    cli.main([SAMPLE, "--out", out, "--no-interview"])
+                with open(out, encoding="utf-8") as f:
+                    json.load(f)
+                self.assertTrue(os.path.isfile(os.path.join(d, "result.report.md")))
+        finally:
+            llm.call_json = llm_orig
+
+
+class BookingLiveTests(unittest.TestCase):
+    def setUp(self):
+        self._orig = llm.call_json
+        common.EVENTS.clear()
+
+    def tearDown(self):
+        llm.call_json = self._orig
+
+    def _run(self, booking_pages):
+        def fake(system, user, schema, max_tokens=16000):
+            if "actions" in schema["properties"]:
+                return {"actions": [{"type": "booking_page", "title": "Book his Calendly", "how": [], "channel_url": "https://calendly.com/x",
+                                     "base_rate": 0.7, "m_relevance": 1.5, "m_timing": 1, "m_warmth": 1, "m_channel": 1.5, "reasons": {},
+                                     "cost_jpy": 0, "hours": 1, "days_to_outcome": 0, "evidence": ["f1"], "need_id": "", "draft": ""}],
+                        "sequence": [], "summary": ""}
+            return fake_call_json(system, user, schema, max_tokens)
+        llm.call_json = fake
+        state = common.normalize_state(common.read_json(SAMPLE))
+        state["booking_pages"] = booking_pages
+        with redirect_stdout(io.StringIO()):
+            return step5_actions.run(step3_needs.run(state, PROFILE), PROFILE)
+
+    def test_unverified_booking_page_is_capped(self):
+        s = self._run([{"url": "https://calendly.com/x", "platform": "calendly", "verified_name": True}])
+        self.assertLessEqual(s["actions"][0]["p"], 0.05)
+        self.assertIn("unverified", s["actions"][0]["title"])
+
+    def test_live_booking_page_keeps_score(self):
+        s = self._run([{"url": "https://calendly.com/x", "live": True}])
+        self.assertGreater(s["actions"][0]["p"], 0.5)

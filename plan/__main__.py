@@ -62,7 +62,7 @@ def write_report(state, path):
             L.append(f"- {q['question']}  \n  **{q.get('answer') or '(skipped)'}**")
     L += ["", "## Actions (Step 5)", "", "| % | Action | Cost | Time | Days |", "|---|---|---|---|---|"]
     for a in state.get("actions", []):
-        tag = "" if a["fits_deadline"] and a["fits_budget"] else " (outside deadline/budget)"
+        tag = "" if a.get("in_total", True) else " (outside deadline/budget)"
         L.append(f"| {pct(a['p'])} | {a['title']}{tag} | ¥{a['cost_jpy']:,} | {a['hours']}h | {a['days_to_outcome']} |")
     for a in state.get("actions", []):
         L += ["", f"### {pct(a['p'])} · {a['title']}",
@@ -100,6 +100,8 @@ def main(argv=None):
         sys.exit(f"Research file not found: {args.research} (run Steps 1-2 first)")
     state = common.normalize_state(common.read_json(args.research))
     profile, ppath = find_profile(args.profile, args.research)
+    if not isinstance(profile, dict):
+        profile = {}
     common.emit(3, "Load research and profile", "done",
                 f"{len(state['findings'])} findings, profile: {os.path.basename(ppath) if ppath else 'none'}, .env: {'found' if env else 'not found'}")
     if not state.get("offer_inventory") and profile.get("offer_inventory_draft"):
@@ -121,8 +123,10 @@ def main(argv=None):
         return 2
 
     state["events_log"] = list(state.get("events_log") or []) + common.EVENTS
+    state = common.scrub_output(state)
     common.write_json(args.out, state)
-    md = os.path.splitext(args.out)[0] + ".md"
+    base, ext = os.path.splitext(args.out)
+    md = base + (".report.md" if ext.lower() == ".md" else ".md")
     write_report(state, md)
     print()
     print(f"Chance of reaching {state['goal'].get('target_name')} by the deadline: {pct(state['p_total'])}  ({time.time() - t0:.0f}s)")
