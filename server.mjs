@@ -206,6 +206,38 @@ function stopJob() {
   job.done = true;
 }
 
+// ---------- one long-lived browser worker for the whole server (src/tools/browser_worker.ts) ----------
+// Chrome asks "Allow?" for each new remote-debugging connection. Research runs reuse this worker's connection, so
+// you click Allow when the first run needs the browser, not again on every run. MEETBLE_BROWSER_WORKER=0 turns it off.
+let worker = null; // Promise<{ MEETBLE_BROWSER_WORKER, MEETBLE_WORKER_TOKEN } | {}>
+function browserPython() {
+  if (process.env.BROWSER_PYTHON) return process.env.BROWSER_PYTHON;
+  return [join(ROOT, ".venv", "Scripts", "python.exe"), join(ROOT, ".venv", "bin", "python")].find((p) => existsSync(p));
+}
+function browserWorkerEnv() {
+  if (["0", "off"].includes(process.env.MEETBLE_BROWSER_WORKER || "") || process.env.MEETBLE_BROWSER === "0") return Promise.resolve({});
+  if (worker) return worker;
+  const py = browserPython();
+  if (!py || !existsSync(join(ROOT, "browser_tools.py"))) return Promise.resolve({});
+  const token = randomBytes(18).toString("hex");
+  worker = new Promise((resolve) => {
+    const p = spawn(py, [join(ROOT, "browser_tools.py"), "serve", "--exit-on-stdin-eof"], { cwd: ROOT, env: { ...process.env, MEETBLE_WORKER_TOKEN: token }, stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
+    let out = "";
+    const t = setTimeout(() => { try { p.kill(); } catch {} resolve({}); }, 30_000);
+    p.stdout.setEncoding("utf8");
+    p.stdout.on("data", (d) => {
+      out += d;
+      const m = /\{"listening":\s*(\d+)\}/.exec(out);
+      if (m) { clearTimeout(t); resolve({ MEETBLE_BROWSER_WORKER: `127.0.0.1:${m[1]}`, MEETBLE_WORKER_TOKEN: token }); out = ""; }
+    });
+    p.stderr.on("data", (d) => process.stderr.write(d));
+    const gone = () => { clearTimeout(t); worker = null; resolve({}); }; // next run starts a new one
+    p.on("error", gone);
+    p.on("exit", gone);
+  });
+  return worker;
+}
+
 function runProc(j, cmd, args, env, onLine) {
   return new Promise((resolve) => {
     const p = spawn(cmd, args, { cwd: ROOT, env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
@@ -266,7 +298,7 @@ async function run(j, body) {
     if (body.hint) args.push("--hint", String(body.hint));
     if (body.x_handle) args.push("--x-handle", String(body.x_handle).replace(/^@/, ""));
     for (const u of [].concat(body.event_urls || []).filter(Boolean)) args.push("--event-url", String(u));
-    const r = await runProc(j, process.execPath, args, { MEETBLE_ACTION_NONCE: j.nonce }, stepHandler(j, researchGroup));
+    const r = await runProc(j, process.execPath, args, { MEETBLE_ACTION_NONCE: j.nonce, ...(await browserWorkerEnv()) }, stepHandler(j, researchGroup));
     if (j.done) return;
     if (r.code !== 0 || !existsSync(RESEARCH)) throw new Error(`Research failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no output"}`);
   }

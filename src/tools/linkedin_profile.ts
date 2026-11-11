@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { isHttpUrl } from "../core/findings.js";
 import type { Target, ToolContext } from "../core/types.js";
+import { callBrowser } from "./browser_session.js";
 
 export interface LinkedInData {
   profile_url?: string; name?: string; headline?: string; current_role?: string; location?: string;
@@ -50,20 +51,9 @@ export async function linkedinProfile(
   deps: { run?: Runner; cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number } = {},
 ): Promise<LinkedInProfileResult> {
   const t = input.target;
-  const cwd = deps.cwd ?? process.cwd();
-  const env = deps.env ?? process.env;
-  if (env.MEETBLE_BROWSER === "0") return { skipped: true, reason: "browser disabled (MEETBLE_BROWSER=0)" };
-  const script = join(cwd, "browser_tools.py");
-  if (!existsSync(script)) return { skipped: true, reason: "browser_tools.py not found" };
-  const python = findPython(cwd, env);
-  if (!python) return { skipped: true, reason: "no .venv with browser-use (see README)" };
-  const who = t.linkedin_url ?? t.name;
-  const { code, stdout, stderr } = await (deps.run ?? runProcess)(python, [script, "linkedin-profile", who], deps.timeoutMs ?? 300_000);
-  const json = lastJsonObject(stdout) as (LinkedInData & { error?: string }) | undefined;
-  if (code !== 0 || !json || json.error) {
-    const why = json?.error ?? (stderr.trim().split(/\r?\n/).pop() || `exit ${code}`);
-    throw new Error(`browser: ${why.slice(0, 160)}`);
-  }
+  const r = await callBrowser("linkedin-profile", { ...deps, signal: ctx.signal }, [t.linkedin_url ?? t.name]);
+  if ("skipped" in r) return { skipped: true, reason: r.skipped };
+  const json = r.json as LinkedInData;
   const url = isHttpUrl(json.profile_url) ? json.profile_url : t.linkedin_url;
   if (url) {
     const add = (kind: string, claim: string, data?: Record<string, unknown>) =>

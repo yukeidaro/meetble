@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 import type { ToolContext } from "../core/types.js";
 import { findPython, lastJsonObject, runProcess, type Runner } from "./linkedin_profile.js";
+import { browserWorker, markWorkerBroken } from "./browser_worker.js";
 
 export const LOGIN_SITES = ["luma", "linkedin", "x", "instagram"] as const;
 export type LoginSite = (typeof LOGIN_SITES)[number];
@@ -15,9 +16,11 @@ export interface LoginCheckResult { skipped?: boolean; reason?: string; sites?: 
 export interface MyLumaEvent { title: string; url: string; date_time?: string; status?: string }
 export interface MyEventsResult { skipped?: boolean; reason?: string; events: MyLumaEvent[] }
 
-type Deps = { run?: Runner; cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number };
+type Deps = { run?: Runner; cwd?: string; env?: NodeJS.ProcessEnv; timeoutMs?: number; signal?: AbortSignal };
 
-async function callBrowser(cmd: string, deps: Deps): Promise<{ skipped: string } | { json: Record<string, unknown> }> {
+/** Runs one browser_tools.py command: through the long-lived worker (one Allow click, see browser_worker.ts), or
+ *  as its own process when the worker is off, can't start, or a test injects `run`. */
+export async function callBrowser(cmd: string, deps: Deps, args: string[] = []): Promise<{ skipped: string } | { json: Record<string, unknown> }> {
   const cwd = deps.cwd ?? process.cwd();
   const env = deps.env ?? process.env;
   if (env.MEETBLE_BROWSER === "0") return { skipped: "browser disabled (MEETBLE_BROWSER=0)" };
@@ -25,17 +28,27 @@ async function callBrowser(cmd: string, deps: Deps): Promise<{ skipped: string }
   if (!existsSync(script)) return { skipped: "browser_tools.py not found" };
   const python = findPython(cwd, env);
   if (!python) return { skipped: "no .venv with browser-use (see README)" };
-  const { code, stdout, stderr } = await (deps.run ?? runProcess)(python, [script, cmd], deps.timeoutMs ?? 300_000);
-  const json = lastJsonObject(stdout) as Record<string, unknown> | undefined;
-  if (code !== 0 || !json || typeof json !== "object" || json.error) {
-    const why = (typeof json?.error === "string" && json.error) || stderr.trim().split(/\r?\n/).pop() || `exit ${code}`;
+  const timeoutMs = deps.timeoutMs ?? 300_000;
+  const worker = deps.run ? undefined : browserWorker(python, script, cwd, env);
+  let json: Record<string, unknown> | undefined;
+  let fail = "";
+  if (worker && (await worker.start().then(() => true, () => (markWorkerBroken(), false)))) {
+    json = await worker.call(cmd, args, { timeoutMs, signal: deps.signal });
+  } else {
+    const { code, stdout, stderr } = await (deps.run ?? runProcess)(python, [script, cmd, ...args], timeoutMs);
+    json = lastJsonObject(stdout) as Record<string, unknown> | undefined;
+    if (code !== 0 || !json || typeof json !== "object") fail = stderr.trim().split(/\r?\n/).pop() || `exit ${code}`;
+  }
+  if (fail || !json || json.error) {
+    const why = (typeof json?.error === "string" && json.error) || fail || "no answer";
     throw new Error(`browser: ${why.slice(0, 160)}`);
   }
   return { json };
 }
 
 /** Which sites are signed in. LUMA_ACCOUNT (optional, in .env) is the account Luma should be signed in as. */
-export async function loginCheck(_input: object, _ctx: ToolContext, deps: Deps = {}): Promise<LoginCheckResult> {
+export async function loginCheck(_input: object, ctx: ToolContext, deps: Deps = {}): Promise<LoginCheckResult> {
+  deps = { signal: ctx.signal, ...deps };
   // cookie-check reads Chrome's session cookies over one CDP call (seconds, no LLM). The browser-use agent
   // (login-check) took ~4 minutes live, so it is only the fallback when the cookie check fails.
   let r: Awaited<ReturnType<typeof callBrowser>>;
@@ -65,7 +78,8 @@ export function summarizeLoginCheck(r: LoginCheckResult): string {
 }
 
 /** The user's upcoming Luma events (registered or hosting). Their URLs go to find_events, which checks each for the target. */
-export async function lumaMyEvents(_input: object, _ctx: ToolContext, deps: Deps = {}): Promise<MyEventsResult> {
+export async function lumaMyEvents(_input: object, ctx: ToolContext, deps: Deps = {}): Promise<MyEventsResult> {
+  deps = { signal: ctx.signal, ...deps };
   const r = await callBrowser("luma-my-events", deps);
   if ("skipped" in r) return { skipped: true, reason: r.skipped, events: [] };
   const raw = Array.isArray(r.json.events) ? r.json.events : [];
