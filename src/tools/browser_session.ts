@@ -36,7 +36,14 @@ async function callBrowser(cmd: string, deps: Deps): Promise<{ skipped: string }
 
 /** Which sites are signed in. LUMA_ACCOUNT (optional, in .env) is the account Luma should be signed in as. */
 export async function loginCheck(_input: object, _ctx: ToolContext, deps: Deps = {}): Promise<LoginCheckResult> {
-  const r = await callBrowser("login-check", deps);
+  // cookie-check reads Chrome's session cookies over one CDP call (seconds, no LLM). The browser-use agent
+  // (login-check) took ~4 minutes live, so it is only the fallback when the cookie check fails.
+  let r: Awaited<ReturnType<typeof callBrowser>>;
+  try {
+    r = await callBrowser("cookie-check", { ...deps, timeoutMs: Math.min(deps.timeoutMs ?? 180_000, 180_000) });
+  } catch {
+    r = await callBrowser("login-check", deps);
+  }
   if ("skipped" in r) return { skipped: true, reason: r.skipped };
   const sites: Partial<Record<LoginSite, SiteLogin>> = {};
   for (const s of LOGIN_SITES) {
