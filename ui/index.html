@@ -1062,6 +1062,9 @@ function onMeta(ev){
 }
 async function runLive(){
   const my = ++runId;
+  // A new run starts with an empty deck: live card ids (live1, live2, ...) restart each run.
+  actions = []; filter = 'all'; openConfirm = null; cur = 0; Object.keys(status).forEach(k => delete status[k]);
+  $('#planCnt').textContent = ''; $('#tabPlan').disabled = true;
   $('#meBubble').textContent = $('#saidText').textContent;
   setState('Researching…', 'busy'); liveStart();
   const body = { ask: $('#saidText').textContent, hint: $('#dHint').value.trim(), x_handle: $('#dX').value.trim(),
@@ -1203,7 +1206,7 @@ $('#filters').addEventListener('click', e => { const b = e.target.closest('[data
 function control(a){
   const st = status[a.id], locked = a.acct && !isOn(a.acct);
   if(st) return statusPill(st);
-  return `<button class="do big" type="button" data-do="${a.id}" ${a.late||locked?'disabled':''}>${locked ? 'Link ' + acctName(a.acct) + ' first' : a.late ? esc(a.lateText || 'Too slow for the deadline') : esc(a.cta)}</button>`;
+  return `<button class="do big" type="button" data-do="${esc(a.id)}" ${a.late||locked?'disabled':''}>${locked ? 'Link ' + acctName(a.acct) + ' first' : a.late ? esc(a.lateText || 'Too slow for the deadline') : esc(a.cta)}</button>`;
 }
 function confirmBox(a){
   if(openConfirm !== a.id) return '';
@@ -1211,7 +1214,7 @@ function confirmBox(a){
     <div class="who">${a.acct ? `Uses your <b>${acctName(a.acct)}</b>` : 'Uses none of your accounts'} · ${esc(a.doWhat)}</div>
     ${a.draft ? `<div class="draft">${esc(a.draft)}</div>` : ''}
     <div class="btns"><label><input type="checkbox" id="skipConfirm"> Don't ask again</label>
-      <button class="ghost" type="button" data-cancel="1">Cancel</button><button class="do" type="button" data-ok="${a.id}">Confirm</button></div>
+      <button class="ghost" type="button" data-cancel="1">Cancel</button><button class="do" type="button" data-ok="${esc(a.id)}">Confirm</button></div>
   </div>`;
 }
 const kindTag = a => `<span class="kind ${a.kind}">${a.kind === 'agent' ? 'Agent does it' : 'You go'}</span>`;

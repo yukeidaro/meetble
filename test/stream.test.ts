@@ -9,6 +9,12 @@ import { fakeFetch, makeCtx } from "./helpers.js";
 beforeEach(() => resetExaMcpSession());
 
 describe("time budget", () => {
+  it("does not start work for a caller that already cancelled", async () => {
+    const ac = new AbortController(); ac.abort(new Error("stop"));
+    let started = false;
+    await expect(withTimeout(async () => { started = true; }, 1000, ac.signal)).rejects.toThrow("stop");
+    expect(started).toBe(false);
+  });
   it("aborts the step's signal when its budget runs out", async () => {
     let sig: AbortSignal | undefined;
     await expect(withTimeout((s) => { sig = s; return new Promise(() => {}); }, 20)).rejects.toBeInstanceOf(OverBudget);
@@ -63,6 +69,19 @@ describe("live action cards", () => {
     expect(actionsFromFinding(f("event", { role: "speaker" }), "Boris Jabes")).toHaveLength(1);
   });
 
+  it("skips a booking page the live check found inactive", () => {
+    expect(actionsFromFinding(f("booking_page", { profile_active: false }), "Boris Jabes")).toHaveLength(0);
+  });
+
+  it("fits an event to the deadline by its date, and leaves an undated event unconfirmed", () => {
+    const got: LiveAction[] = [];
+    const live = new LiveActions(() => "Boris Jabes", (a) => got.push(a), 1, "2026-11-12");
+    live.consider({ ...f("event", { role: "speaker", event_date: "2026-11-12" }, "a"), id: "e1", source_url: "https://lu.ma/a" });
+    live.consider({ ...f("event", { role: "speaker", event_date: "2026-11-14" }, "b"), id: "e2", source_url: "https://lu.ma/b" });
+    live.consider({ ...f("event", { role: "speaker" }, "c"), id: "e3", source_url: "https://lu.ma/c" });
+    expect(got.map((a) => a.in_total)).toEqual([true, false, false]);
+  });
+
   it("leaves an unchecked paid-call price unknown instead of ¥0", () => {
     expect(actionsFromFinding(f("paid_consult_page"), "Boris Jabes")[0]!.cost_jpy).toBeNull();
   });
@@ -91,6 +110,8 @@ describe("live action cards", () => {
 
   it("runResearch streams actions before it returns", async () => {
     const { fetch } = fakeFetch((url) => {
+      if (url.endsWith("/event_types")) return { json: [{ name: "30 min" }] }; // Calendly API: active profile
+      if (url.startsWith("https://calendly.com/api/")) return { json: { name: "Boris Jabes" } };
       if (url.startsWith("https://api.exa.ai")) return { json: { results: [{ url: "https://calendly.com/borisjabes", title: "Boris Jabes | Calendly", text: "Boris Jabes. Book a 30 minute meeting." }] } };
       return { status: 404, text: "" };
     });

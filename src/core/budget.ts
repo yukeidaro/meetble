@@ -33,7 +33,8 @@ export function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, ms: numb
   const ac = new AbortController();
   const onParent = () => ac.abort(parent?.reason);
   parent?.addEventListener("abort", onParent, { once: true });
-  if (ms <= 0) { ac.abort(new OverBudget(0)); return Promise.reject(new OverBudget(0)); }
+  if (parent?.aborted) { parent.removeEventListener("abort", onParent); ac.abort(parent.reason); return Promise.reject(parent.reason ?? new Error("aborted")); }
+  if (ms <= 0) { parent?.removeEventListener("abort", onParent); ac.abort(new OverBudget(0)); return Promise.reject(new OverBudget(0)); }
   return new Promise<T>((resolve, reject) => {
     const t = setTimeout(() => { const e = new OverBudget(ms); ac.abort(e); reject(e); }, ms);
     const done = () => { clearTimeout(t); parent?.removeEventListener("abort", onParent); };

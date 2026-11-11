@@ -65,7 +65,8 @@ const ctx: ToolContext = {
   now: () => new Date(),
   emit: (e) => {
     events.push(e);
-    console.log(`${ICON[e.status]} ${e.label}${e.note ? ` (${e.note})` : ""}`);
+    const one = (t: string) => t.replace(/[\r\n]+/g, " "); // one checklist line per event, whatever a source page contained
+    console.log(`${ICON[e.status]} ${one(e.label)}${e.note ? ` (${one(e.note)})` : ""}`);
   },
   findings: new FindingStore(),
 };
@@ -87,7 +88,8 @@ async function waitForLogin(c: LoginCheckResult): Promise<boolean> {
 let skipLogin = false;
 const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls, waitForLogin,
   // One line per live action card; server.mjs forwards each to the UI the moment it appears.
-  onAction: (a) => console.log(`ACTION ${JSON.stringify(a)}`) }, ctx);
+  // The nonce comes from server.mjs, so a checklist note can't pass itself off as a card.
+  onAction: (a) => console.log(`ACTION${process.env.MEETBLE_ACTION_NONCE ? `:${process.env.MEETBLE_ACTION_NONCE}` : ""} ${JSON.stringify(a)}`) }, ctx);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify({ ...result, events_log: events }, null, 2), "utf8");
 console.log(`\n${result.findings.length} findings, ${result.live_actions.length} live actions in ${result.timing.elapsed_s} s, saved to ${out}`);

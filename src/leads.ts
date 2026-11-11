@@ -30,6 +30,8 @@ export interface LiveAction {
   from_kind: string;
   /** The person this route goes through, for referrals and inner-circle cards. */
   contact?: string;
+  /** Events only: the confirmed date (YYYY-MM-DD), or null when the page gave none. */
+  event_date?: string | null;
   provisional: true;
   /** Fits the deadline by its own days_to_outcome; Step 5 re-checks budget and ranking. */
   in_total: boolean;
@@ -42,10 +44,10 @@ const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd
 export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAction, "id" | "provisional" | "in_total" | "fits_deadline">[] {
   const first = targetName.split(/\s+/)[0] || targetName;
   const d = (f.data ?? {}) as Record<string, unknown>;
-  const mk = (type: LeadType, title: string, how: string[], url: string, cost: number | null, hours: number, days: number, why: string, contact?: string) => ({
+  const mk = (type: LeadType, title: string, how: string[], url: string, cost: number | null, hours: number, days: number, why: string, contact?: string, eventDate?: string | null) => ({
     type, title, how, channel_url: url, p: BASE_LOW[type], cost_jpy: cost, hours, days_to_outcome: days,
     reasons: { base_rate: `${why} (provisional: lowest typical rate for this route, not yet weighed)` }, evidence: [f.id],
-    from_kind: f.kind, ...(contact ? { contact } : {}),
+    from_kind: f.kind, ...(contact ? { contact } : {}), ...(eventDate !== undefined ? { event_date: eventDate } : {}),
   });
   switch (f.kind) {
     case "mutuals": {
@@ -66,8 +68,9 @@ export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAct
       if (!["host", "speaker", "attendee"].includes(String(d.role))) return [];
       return [mk("event", `Meet ${first} at ${clip(f.claim.replace(/^.*?"(.*)".*$/, "$1"), 70)}`,
         ["Register (or confirm you're registered)", `Prepare a one-line opener tied to what ${first} is speaking about`, "Find them right after their session"],
-        f.source_url, 0, 2, 1, f.claim)];
+        f.source_url, 0, 2, 1, f.claim, undefined, typeof d.event_date === "string" ? d.event_date : null)];
     case "booking_page":
+      if (d.profile_active === false) return []; // the live check found the profile inactive; unknown stays a route
       return [mk("booking_page", `Book time with ${first} through their booking page`,
         ["Open the page and check for open slots", "Pick the earliest slot and write a one-line agenda"],
         f.source_url, 0, 0.2, 2, f.claim)];
@@ -83,10 +86,12 @@ export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAct
       return [mk("network_first", `Learn how someone else reached ${first}`,
         ["Read the write-up", "Message its author and ask what worked"],
         f.source_url, 0, 0.5, 3, f.claim)];
-    case "post":
+    case "post": {
+      const profileOnly = /linkedin\.com\/in\//i.test(f.source_url); // LinkedIn activity comes with the profile URL, not a permalink
       return [mk("post_and_mention", `Reply to ${first}'s recent post with one concrete point`,
-        ["Open the post", "Reply with one specific, useful point (no pitch)"],
+        [profileOnly ? `Open ${first}'s LinkedIn profile, then Activity, and find the latest post` : "Open the post", "Reply with one specific, useful point (no pitch)"],
         f.source_url, 0, 0.2, 2, f.claim)];
+    }
     default:
       return [];
   }
@@ -101,7 +106,8 @@ export class LiveActions {
   /** Caps per finding kind (not per action type): precedents and inner-circle contacts both make network_first cards. */
   private static CAP: Record<string, number> = { post: 2, inner_circle: 4, precedent: 2, mutuals: 5, event: 4 };
 
-  constructor(private readonly targetName: () => string, private readonly onAction: (a: LiveAction) => void, private readonly daysLeft?: number) {}
+  constructor(private readonly targetName: () => string, private readonly onAction: (a: LiveAction) => void,
+    private readonly daysLeft?: number, private readonly deadline?: string) {}
 
   consider(f: Finding): void {
     for (const a of actionsFromFinding(f, this.targetName())) {
@@ -111,7 +117,11 @@ export class LiveActions {
       if (n >= (LiveActions.CAP[a.from_kind] ?? 3)) continue;
       this.seen.add(key);
       this.perType.set(a.from_kind, n + 1);
-      const fits = this.daysLeft === undefined || a.days_to_outcome <= Math.max(this.daysLeft, 0.5);
+      // Events fit only by their confirmed date (find_events also returns events a few days past the deadline);
+      // an undated event stays unconfirmed. Other routes fit by their own days_to_outcome.
+      const fits = a.event_date !== undefined
+        ? !!a.event_date && (!this.deadline || a.event_date.slice(0, 10) <= this.deadline)
+        : this.daysLeft === undefined || a.days_to_outcome <= Math.max(this.daysLeft, 0.5);
       const full: LiveAction = { ...a, id: `live${++this.seq}`, provisional: true, fits_deadline: fits, in_total: fits };
       this.list.push(full);
       this.onAction(full);

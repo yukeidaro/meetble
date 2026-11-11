@@ -6,6 +6,7 @@
 // Each stdout checklist line ("ICON label (note)") becomes a UI event, streamed to the browser over SSE.
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -184,7 +185,7 @@ function startJob(body) {
   if (job && !job.done) stopJob();
   const ask = parseAsk(body.ask);
   if (body.name) ask.name = String(body.name).trim();
-  const j = { id: Date.now().toString(36), events: [], clients: new Set(), done: false, child: null, ask, live: [] };
+  const j = { id: Date.now().toString(36), events: [], clients: new Set(), done: false, child: null, ask, live: [], nonce: randomBytes(9).toString("hex") };
   job = j;
   const push = (ev) => {
     if (job !== j) return;
@@ -231,8 +232,11 @@ function stepHandler(j, groupFor) {
       j.push({ type: "step", id: "si" + sid(t), group: G[0], label: "Sign in needed in your Chrome", status: "locked", note: t });
       return;
     }
-    if (line.startsWith("ACTION ")) { // a live action card from research (src/leads.ts): show it now, Step 5 re-ranks later
-      try { const a = JSON.parse(line.slice(7)); j.live.push(a); j.push({ type: "action", action: toUiAction(a) }); } catch {}
+    // A live action card from research (src/leads.ts): show it now, Step 5 re-ranks later. Only lines carrying this
+    // run's nonce count, so text from a web page that ends up in a checklist note can't forge a card.
+    const tag = `ACTION:${j.nonce} `;
+    if (line.startsWith(tag)) {
+      try { const a = JSON.parse(line.slice(tag.length)); j.live.push(a); j.push({ type: "action", action: toUiAction(a) }); } catch {}
       return;
     }
     const s = parseLine(line);
@@ -262,7 +266,7 @@ async function run(j, body) {
     if (body.hint) args.push("--hint", String(body.hint));
     if (body.x_handle) args.push("--x-handle", String(body.x_handle).replace(/^@/, ""));
     for (const u of [].concat(body.event_urls || []).filter(Boolean)) args.push("--event-url", String(u));
-    const r = await runProc(j, process.execPath, args, {}, stepHandler(j, researchGroup));
+    const r = await runProc(j, process.execPath, args, { MEETBLE_ACTION_NONCE: j.nonce }, stepHandler(j, researchGroup));
     if (j.done) return;
     if (r.code !== 0 || !existsSync(RESEARCH)) throw new Error(`Research failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no output"}`);
   }
