@@ -4,8 +4,8 @@
 // Storage: one JSON file per account in $MEETBLE_DATA/users/<google sub>.json (on Cloud Run, a Cloud Storage
 // bucket mounted at /data). Session cookies for LinkedIn / X / Luma / Instagram are encrypted at rest with
 // AES-256-GCM, keyed from MEETBLE_SECRET, and never sent back to the browser.
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { createCipheriv, createDecipheriv, createHash, createHmac, createPublicKey, randomBytes, timingSafeEqual, verify } from "node:crypto";
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const SITES = {
@@ -14,7 +14,7 @@ export const SITES = {
   luma: { name: "Luma", cookie: "luma.auth-session-key", domain: ".luma.com", hint: "luma.com/user/you" },
   instagram: { name: "Instagram", cookie: "sessionid", domain: ".instagram.com", hint: "@handle" },
 };
-const PROFILE_KEYS = ["name", "role", "location", "company", "background", "looking_for", "offer_inventory_draft", "links"];
+const PROFILE_KEYS = ["name", "role", "location", "company", "background", "looking_for", "offer_inventory_draft", "links", "consent"];
 const SESSION_DAYS = 30;
 
 export function createAccounts({ dataDir, clientId, secret, allow = "", fetchImpl = globalThis.fetch, now = () => Date.now() }) {
@@ -23,14 +23,19 @@ export function createAccounts({ dataDir, clientId, secret, allow = "", fetchImp
     console.warn("MEETBLE_SECRET is not set: sessions and saved site cookies won't survive a restart.");
   }
   const usersDir = join(dataDir, "users");
-  mkdirSync(usersDir, { recursive: true });
+  mkdirSync(usersDir, { recursive: true, mode: 0o700 });
+  try { chmodSync(dataDir, 0o700); chmodSync(usersDir, 0o700); } catch { /* e.g. a bucket mount that ignores modes */ }
   const encKey = createHash("sha256").update("meetble-connections:" + secret).digest();
   const macKey = createHash("sha256").update("meetble-session:" + secret).digest();
   const allowList = String(allow).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
 
   const fileOf = (sub) => join(usersDir, String(sub).replace(/[^0-9A-Za-z_-]/g, "") + ".json");
   const load = (sub) => { const f = fileOf(sub); return existsSync(f) ? JSON.parse(readFileSync(f, "utf8")) : null; };
-  const save = (u) => { const f = fileOf(u.sub); writeFileSync(f + ".tmp", JSON.stringify(u, null, 2)); renameSync(f + ".tmp", f); return u; };
+  // One server instance writes accounts (deploy-cloudrun.sh: --max-instances 1); a unique temp name + rename keeps readers off half-written files.
+  const save = (u) => {
+    const f = fileOf(u.sub), tmp = `${f}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
+    writeFileSync(tmp, JSON.stringify(u, null, 2), { mode: 0o600 }); renameSync(tmp, f); return u;
+  };
 
   const seal = (text) => {
     const iv = randomBytes(12), c = createCipheriv("aes-256-gcm", encKey, iv);
@@ -46,28 +51,48 @@ export function createAccounts({ dataDir, clientId, secret, allow = "", fetchImp
   };
 
   // ---------- Google sign-in ----------
-  function allowed(email) {
+  // "@company.com" entries only match Google Workspace accounts of that domain (the token's hd claim), so a
+  // consumer Google account registered with someone else's work address can't get in. Gmail has no hd.
+  function allowed(email, hd) {
     if (!allowList.length) return true;
-    const e = email.toLowerCase();
-    return allowList.some((a) => (a.startsWith("@") ? e.endsWith(a) : e === a));
+    const e = String(email || "").toLowerCase(), d = e.slice(e.lastIndexOf("@"));
+    return allowList.some((a) => (a.startsWith("@") ? d === a && (a === "@gmail.com" ? !hd : String(hd || "").toLowerCase() === a.slice(1)) : e === a));
   }
-  /** Verify a Google Identity Services ID token (the "credential" the Sign in with Google button returns). */
+  // Google's signing keys, cached for as long as Google says (Cache-Control max-age), fetched with a 5 s limit.
+  let jwks = null, jwksUntil = 0;
+  async function googleKeys(force) {
+    if (!force && jwks && now() < jwksUntil) return jwks;
+    const r = await fetchImpl("https://www.googleapis.com/oauth2/v3/certs", { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) throw httpError(503, "Couldn't reach Google to check the sign-in. Try again.");
+    const body = await r.json();
+    const age = Number(String(r.headers?.get?.("cache-control") || "").match(/max-age=(\d+)/)?.[1] || 3600);
+    jwks = body.keys || []; jwksUntil = now() + age * 1000;
+    return jwks;
+  }
+  /** Verify a Google Identity Services ID token (the "credential" the Sign in with Google button returns) locally, RS256 against Google's keys. */
   async function verifyGoogle(credential) {
     if (!credential || typeof credential !== "string") throw httpError(400, "missing credential");
-    const r = await fetchImpl("https://oauth2.googleapis.com/tokeninfo?id_token=" + encodeURIComponent(credential));
-    const t = await r.json().catch(() => ({}));
-    if (!r.ok || t.error) throw httpError(401, "Google didn't accept that sign-in");
+    const parts = credential.split(".");
+    if (parts.length !== 3) throw httpError(401, "Google didn't accept that sign-in");
+    let head, t;
+    try { head = JSON.parse(Buffer.from(parts[0], "base64url")); t = JSON.parse(Buffer.from(parts[1], "base64url")); }
+    catch { throw httpError(401, "Google didn't accept that sign-in"); }
+    if (head.alg !== "RS256") throw httpError(401, "Google didn't accept that sign-in");
+    let jwk = (await googleKeys()).find((k) => k.kid === head.kid);
+    if (!jwk) jwk = (await googleKeys(true)).find((k) => k.kid === head.kid); // Google rotated its keys
+    const ok = jwk && verify("RSA-SHA256", Buffer.from(parts[0] + "." + parts[1]), createPublicKey({ key: jwk, format: "jwk" }), Buffer.from(parts[2], "base64url"));
+    if (!ok) throw httpError(401, "Google didn't accept that sign-in");
     if (t.aud !== clientId) throw httpError(401, "sign-in was for a different app");
     if (!["accounts.google.com", "https://accounts.google.com"].includes(t.iss)) throw httpError(401, "bad issuer");
     if (Number(t.exp) * 1000 < now()) throw httpError(401, "sign-in expired, try again");
     if (String(t.email_verified) !== "true") throw httpError(401, "Google email isn't verified");
-    if (!allowed(t.email)) throw httpError(403, "This Meetble is invite-only. Ask the owner to add " + t.email);
-    return { sub: String(t.sub), email: t.email, name: t.name || t.email, picture: t.picture || "" };
+    if (!allowed(t.email, t.hd)) throw httpError(403, "This Meetble is invite-only. Ask the owner to add " + t.email);
+    return { sub: String(t.sub), email: t.email, name: t.name || t.email, picture: t.picture || "", hd: t.hd };
   }
   /** First sign-in creates the account; later sign-ins refresh name/picture. */
   function upsert(g) {
     const u = load(g.sub) || { sub: g.sub, created_at: new Date(now()).toISOString(), connections: {}, profile: {} };
-    Object.assign(u, { email: g.email, name: g.name, picture: g.picture, last_login_at: new Date(now()).toISOString() });
+    Object.assign(u, { email: g.email, hd: g.hd, name: g.name, picture: g.picture, last_login_at: new Date(now()).toISOString() });
     if (!u.profile?.name) u.profile = { ...(u.profile || {}), name: g.name };
     return save(u);
   }
@@ -86,7 +111,8 @@ export function createAccounts({ dataDir, clientId, secret, allow = "", fetchImp
     const want = Buffer.from(mac(`${sub}.${exp}`)), got = Buffer.from(sig);
     if (want.length !== got.length || !timingSafeEqual(want, got)) return null;
     if (Number(exp) * 1000 < now()) return null;
-    return load(sub);
+    const u = load(sub);
+    return u && allowed(u.email, u.hd) ? u : null; // the allow list may have changed since this session was issued
   }
   const cookieHeader = (value, secure, maxAge = SESSION_DAYS * 86400) =>
     `mb_session=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
@@ -132,6 +158,7 @@ export function createAccounts({ dataDir, clientId, secret, allow = "", fetchImp
     const links = { ...(p.links || {}) };
     for (const [site, c] of Object.entries(u.connections || {})) if (c.url || c.handle) links[site] = c.url || c.handle;
     p.links = links;
+    delete p.consent;
     p._source = "Meetble account " + u.email;
     return p;
   }

@@ -2,12 +2,24 @@ import { describe, expect, it } from "vitest";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { generateKeyPairSync, sign } from "node:crypto";
 import { createAccounts, cookieValue } from "../accounts.mjs";
 
 const CLIENT = "test-client.apps.googleusercontent.com";
-function setup(token, extra = {}) {
-  const fetchImpl = async () => ({ ok: !token.error, json: async () => token });
-  return createAccounts({ dataDir: mkdtempSync(join(tmpdir(), "mb-")), clientId: CLIENT, secret: "s3cret", fetchImpl, ...extra });
+const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const JWK = { ...publicKey.export({ format: "jwk" }), kid: "k1", alg: "RS256", use: "sig" };
+const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
+function jwt(claims, key = privateKey, kid = "k1") {
+  const data = b64({ alg: "RS256", kid, typ: "JWT" }) + "." + b64(claims);
+  return data + "." + sign("RSA-SHA256", Buffer.from(data), key).toString("base64url");
+}
+// Google's certs endpoint, served from memory. verifyGoogle(tok) with tok = the claims object signs them first.
+function setup(claims, extra = {}) {
+  const fetchImpl = async () => ({ ok: true, headers: new Map([["cache-control", "max-age=60"]]), json: async () => ({ keys: [JWK] }) });
+  const a = createAccounts({ dataDir: mkdtempSync(join(tmpdir(), "mb-")), clientId: CLIENT, secret: "s3cret", fetchImpl, ...extra });
+  const verify = a.verifyGoogle;
+  a.verifyGoogle = (tok) => verify(tok === "t" || tok === "tok" ? jwt(claims) : tok);
+  return a;
 }
 const good = { aud: CLIENT, iss: "https://accounts.google.com", exp: String(Math.floor(Date.now() / 1000) + 600), email_verified: "true", sub: "123", email: "a@gmail.com", name: "A" };
 
@@ -24,6 +36,24 @@ describe("accounts", () => {
     await expect(setup({ ...good, email_verified: "false" }).verifyGoogle("t")).rejects.toThrow(/verified/);
     await expect(setup(good, { allow: "@example.com" }).verifyGoogle("t")).rejects.toThrow(/invite-only/);
     await expect(setup(good, { allow: "@gmail.com" }).verifyGoogle("t")).resolves.toMatchObject({ sub: "123" });
+    // a domain entry needs a Workspace account of that domain, not just a matching address
+    await expect(setup({ ...good, email: "b@acme.com" }, { allow: "@acme.com" }).verifyGoogle("t")).rejects.toThrow(/invite-only/);
+    await expect(setup({ ...good, email: "b@acme.com", hd: "acme.com" }, { allow: "@acme.com" }).verifyGoogle("t")).resolves.toMatchObject({ email: "b@acme.com" });
+  });
+  it("rejects tokens not signed by Google, and expired ones", async () => {
+    const other = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey;
+    await expect(setup(good).verifyGoogle(jwt(good, other))).rejects.toThrow(/didn't accept/);
+    await expect(setup(good).verifyGoogle(jwt(good, privateKey, "unknown"))).rejects.toThrow(/didn't accept/);
+    await expect(setup(good).verifyGoogle("not.a.jwt")).rejects.toThrow(/didn't accept/);
+    await expect(setup({ ...good, exp: String(Math.floor(Date.now() / 1000) - 10) }).verifyGoogle("t")).rejects.toThrow(/expired/);
+  });
+  it("drops a session once its email leaves the allow list", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "mb-"));
+    const open = setup(good, { dataDir });
+    open.upsert(await open.verifyGoogle("t"));
+    const v = open.issue("123");
+    expect(setup(good, { dataDir }).userFromCookie("mb_session=" + v)?.sub).toBe("123");
+    expect(setup(good, { dataDir, allow: "someone@else.com" }).userFromCookie("mb_session=" + v)).toBeNull();
   });
   it("session cookies round-trip and can't be forged", async () => {
     const a = setup(good); a.upsert(await a.verifyGoogle("t"));

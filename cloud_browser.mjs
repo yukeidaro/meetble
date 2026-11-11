@@ -17,7 +17,8 @@ export async function launchSignedInChrome(cookies, { env = process.env, timeout
   const dir = mkdtempSync(join(tmpdir(), "meetble-chrome-"));
   const p = spawn(bin, ["--headless=new", "--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage", "--no-first-run",
     "--remote-debugging-address=127.0.0.1", "--remote-debugging-port=0", `--user-data-dir=${dir}`, "--window-size=1280,900", "about:blank"],
-  { stdio: ["ignore", "ignore", "pipe"] });
+  // A minimal env: the server's API keys and MEETBLE_SECRET never reach the browser process.
+  { stdio: ["ignore", "ignore", "pipe"], env: { PATH: env.PATH || "/usr/bin:/bin", HOME: dir, TMPDIR: dir, LANG: env.LANG || "C.UTF-8" } });
   const close = () => { try { p.kill("SIGKILL"); } catch {} try { rmSync(dir, { recursive: true, force: true }); } catch {} };
   try {
     const url = await new Promise((resolve, reject) => {
@@ -25,6 +26,7 @@ export async function launchSignedInChrome(cookies, { env = process.env, timeout
       const t = setTimeout(() => reject(new Error("Chrome didn't start in time")), timeoutMs);
       p.stderr.setEncoding("utf8");
       p.stderr.on("data", (d) => { buf += d; const m = buf.match(/DevTools listening on (ws:\/\/\S+)/); if (m) { clearTimeout(t); resolve(m[1]); } });
+      p.on("error", (e) => { clearTimeout(t); reject(new Error("couldn't start Chrome: " + e.message)); });
       p.on("exit", (code) => { clearTimeout(t); reject(new Error(`Chrome exited (${code}): ${buf.trim().split("\n").pop() || ""}`)); });
     });
     if (cookies.length) await cdpCall(url, "Storage.setCookies", { cookies });

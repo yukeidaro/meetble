@@ -202,8 +202,10 @@ function startJob(body, owner = "local", user = null) {
   if (body.name) ask.name = String(body.name).trim();
   const j = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), events: [], clients: new Set(), done: false, child: null, ask, owner, user, paths: pathsFor(owner), cleanup: [] };
   jobs.set(owner, j);
+  let ended = false;
   const push = (ev) => {
-    if (jobs.get(owner) !== j) return;
+    if (ended || (jobs.get(owner) !== j && ev.type !== "end")) return;
+    if (ev.type === "end") ended = true;
     j.events.push(ev);
     for (const c of j.clients) c.write(`data: ${JSON.stringify(ev)}\n\n`);
     // Close the streams after "end": clients that don't close on their own (curl, proxies) would otherwise hang.
@@ -221,6 +223,7 @@ function stopJob(owner = "local") {
   try { job.child?.kill(); } catch {}
   job.done = true;
   for (const f of job.cleanup.splice(0)) { try { f(); } catch {} }
+  job.push?.({ type: "end" }); // tabs still streaming the stopped run stop showing "Researching…"
 }
 
 function runProc(j, cmd, args, env, onLine) {
@@ -273,6 +276,7 @@ async function cloudSetup(j) {
   }
   try {
     const chrome = await launchSignedInChrome(cookies);
+    if (j.done) { chrome.close(); return env; } // stopped or replaced while Chrome was starting
     j.cleanup.push(chrome.close);
     env.MEETBLE_CDP_URL = chrome.url;
     env.MEETBLE_CDP_WAIT = "20"; // no Allow prompt on a server Chrome
@@ -289,6 +293,7 @@ async function run(j, body) {
   const { push, ask } = j;
   const { research: RESEARCH, plan: PLAN } = j.paths;
   const env = CLOUD ? await cloudSetup(j) : {};
+  if (j.done) return;
   push({ type: "meta", name: ask.name, deadline: ask.deadline, deadline_label: ask.deadline_label, budget_jpy: ask.budget_jpy });
   if (!ask.name) throw new Error("Couldn't find a name in that. Try: Meet Boris Jabes before Friday");
 
@@ -316,6 +321,7 @@ async function run(j, body) {
   research.goal = { ...(research.goal || {}), meet: ask.meet, ...(ask.budget_jpy ? { budget_jpy: ask.budget_jpy } : {}) };
   writeFileSync(RESEARCH, JSON.stringify(research, null, 2), "utf8");
   const pargs = ["-m", "plan", RESEARCH, "--out", PLAN, "--no-interview"];
+  if (CLOUD) pargs.push("--consent", j.user?.profile?.consent ? "yes" : "no"); // the "My profile" checkbox; no stdin to ask on
   if (existsSync(j.paths.profile)) pargs.push("--profile", j.paths.profile);
   const mtime = () => (existsSync(PLAN) ? statSync(PLAN).mtimeMs : 0), before = mtime();
   const r = await runProc(j, PY, pargs, { PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }, stepHandler(j, () => G[5]));
@@ -414,8 +420,9 @@ async function checkLogins(force) {
 // ---------- http ----------
 const MIME = { ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8", ".md": "text/markdown; charset=utf-8" };
 async function readJson(req) {
-  let raw = "";
-  for await (const c of req) { raw += c; if (raw.length > 200_000) throw httpError(413, "request too large"); }
+  const chunks = []; let n = 0;
+  for await (const c of req) { n += c.length; if (n > 200_000) throw httpError(413, "request too large"); chunks.push(c); }
+  const raw = Buffer.concat(chunks).toString("utf8"); // decode once, so a multibyte character split across chunks survives
   try { return JSON.parse(raw || "{}"); } catch { throw httpError(400, "bad JSON"); }
 }
 const send = (res, code, body, type = "application/json; charset=utf-8") => { res.writeHead(code, { "content-type": type, "cache-control": "no-store" }); res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body)); };

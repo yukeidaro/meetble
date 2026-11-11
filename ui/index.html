@@ -573,6 +573,8 @@ button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(
     <label for="pBg">Background (one per line)</label><textarea id="pBg"></textarea>
     <label for="pOffer">What you can offer people (one per line)</label><textarea id="pOffer"></textarea>
     <label for="pLook">What you're looking for (one per line)</label><textarea id="pLook"></textarea>
+    <label style="display:flex;gap:8px;align-items:flex-start;color:var(--ink)"><input type="checkbox" id="pConsent" style="width:auto;margin-top:4px">
+      <span>Drafts may use any detail of this profile, including your current job. Off: strict mode, where drafts leave your employer out.</span></label>
     <div class="err" id="profErr"></div>
     <div class="row">
       <button class="tbtn" value="cancel" formnovalidate>Cancel</button>
@@ -1124,7 +1126,13 @@ function showMe(u){
   $('#meAv').innerHTML = u.picture ? `<img src="${u.picture}" alt="" referrerpolicy="no-referrer">` : (u.name || '?')[0].toUpperCase();
 }
 async function signIn(){
-  const r = await fetch(q('/api/me'));
+  let r;
+  try{ r = await fetch(q('/api/me')); }
+  catch{ // server unreachable: say so, and let them retry instead of leaving a dead page
+    $('#gate').hidden = false; $('#gateErr').textContent = 'Couldn\'t reach the Meetble server. ';
+    const b = document.createElement('button'); b.className = 'tbtn'; b.type = 'button'; b.textContent = 'Try again'; b.onclick = () => location.reload();
+    $('#gateErr').appendChild(b); return new Promise(() => {});
+  }
   if(r.ok){ showMe(await r.json()); return; }
   $('#gate').hidden = false;
   await new Promise(res => { const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.onload = res; s.onerror = res; document.head.appendChild(s); });
@@ -1173,20 +1181,23 @@ $('#connForm').addEventListener('submit', async e => {
 $('#connDel').addEventListener('click', async () => {
   try{ await saveMe('/api/me/connections/' + connSite, 'DELETE'); $('#connDlg').close(); }catch(err){ $('#connErr').textContent = err.message; }
 });
-const lines = v => Array.isArray(v) ? v.join('\n') : (v || '');
+const lines = v => Array.isArray(v) ? v.map(o => typeof o === 'string' ? o : o?.offer || '').filter(Boolean).join('\n') : (v || '');
 $('#profileBtn').addEventListener('click', () => {
   const p = ME?.profile || {};
   $('#pName').value = p.name || ''; $('#pRole').value = p.role || ''; $('#pLoc').value = p.location || '';
+  $('#pConsent').checked = !!p.consent;
   $('#pBg').value = lines(p.background); $('#pOffer').value = lines(p.offer_inventory_draft); $('#pLook').value = lines(p.looking_for);
   $('#profErr').textContent = ''; $('#profDlg').showModal();
 });
 $('#profForm').addEventListener('submit', async e => {
   if(e.submitter?.value !== 'save') return;
   e.preventDefault();
-  const split = v => v.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  const split = v => v.split(/\n+/).map(s => s.trim()).filter(Boolean), p0 = ME?.profile || {};
   try{
     await saveMe('/api/me/profile', 'PUT', { name: $('#pName').value.trim(), role: $('#pRole').value.trim(), location: $('#pLoc').value.trim(),
-      background: split($('#pBg').value), offer_inventory_draft: split($('#pOffer').value), looking_for: split($('#pLook').value) });
+      background: split($('#pBg').value), looking_for: split($('#pLook').value), consent: $('#pConsent').checked,
+      // keep structured offers (offer + details) when the text of an offer didn't change
+      offer_inventory_draft: split($('#pOffer').value).map(t => (Array.isArray(p0.offer_inventory_draft) ? p0.offer_inventory_draft : []).find(o => o && typeof o === 'object' && o.offer === t) || t) });
     $('#profDlg').close();
   }catch(err){ $('#profErr').textContent = err.message; }
 });
