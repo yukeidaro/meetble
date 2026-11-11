@@ -87,9 +87,13 @@ The first command does the research (Steps 0–2) and writes `out/research.json`
 For Luma and LinkedIn, also install browser-use (`pip install "browser-use[anthropic]"`), turn on remote debugging in Chrome at `chrome://inspect/#remote-debugging`, and stay logged in:
 
 ```powershell
+python browser_tools.py login-check
+python browser_tools.py luma-my-events
 python browser_tools.py luma-check https://luma.com/compiled-poy7
 python browser_tools.py linkedin-profile "Boris Jabes"
 ```
+
+The research run starts with a sign-in check of Luma, LinkedIn, X and Instagram in your Chrome. If a site is signed out, it lists the login pages and waits: you sign in yourself (Meetble never types a password), then press Enter. Set `LUMA_ACCOUNT` in `.env` to warn when Luma is signed in as the wrong account. Your upcoming Luma events are then checked for the target, so an event you're both at tonight shows up. You can also pass an event yourself with `--event-url https://luma.com/compiled-poy7` (repeatable) or a `my_events` list in `user_profile.json`.
 
 ## The demo
 

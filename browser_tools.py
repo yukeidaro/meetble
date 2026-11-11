@@ -8,6 +8,8 @@ Setup (once):
   Be logged in to luma.com and linkedin.com in that Chrome.
 
 Usage (each prints one JSON object, so the Next.js app can call it with child_process):
+  python browser_tools.py login-check                              # are Luma + LinkedIn signed in? (run first)
+  python browser_tools.py luma-my-events                           # upcoming events I am registered for / hosting
   python browser_tools.py luma-check   https://luma.com/compiled-poy7
   python browser_tools.py luma-register https://luma.com/compiled-poy7
   python browser_tools.py linkedin-profile "Boris Jabes"           # or a linkedin.com/in/... URL
@@ -51,6 +53,29 @@ class LinkedInProfile(BaseModel):
     notes: str
 
 
+class SiteLogin(BaseModel):
+    logged_in: bool
+    account: str                       # email or display name shown for the signed-in account ("" if logged out)
+
+
+class LoginStatus(BaseModel):
+    luma: SiteLogin
+    linkedin: SiteLogin
+    x: SiteLogin
+    instagram: SiteLogin
+
+
+class MyLumaEvent(BaseModel):
+    title: str
+    url: str                           # the event page, e.g. https://luma.com/abc123
+    date_time: str
+    status: str                        # "Going", "Hosting", "Pending approval", "Waitlist", ...
+
+
+class MyLumaEvents(BaseModel):
+    events: list[MyLumaEvent]
+
+
 class ActionResult(BaseModel):
     done: bool
     detail: str
@@ -67,6 +92,27 @@ def run(task: str, schema):
     history = agent.run_sync(max_steps=30, timeout=300)
     out = history.structured_output
     return out.model_dump() if out is not None else {"error": "no result", "final": history.final_result()}
+
+
+def login_check():
+    return run(
+        "Check which sites I am signed in to in this browser, one by one: https://luma.com/home (Luma), "
+        "https://www.linkedin.com/feed/ (LinkedIn), https://x.com/home (X), https://www.instagram.com/ (Instagram). "
+        "For each, report whether I am signed in and the account email, handle or name shown (open the avatar/profile "
+        "menu to read it, then close it). A login or sign-up page means signed out. "
+        "Never type a password, never click Sign in or Log out.",
+        LoginStatus,
+    )
+
+
+def luma_my_events():
+    return run(
+        "Open https://luma.com/home (I am signed in to Luma). List the UPCOMING events I am registered for or hosting "
+        "(the 'Upcoming' tab; scroll to load all, at most 15). For each: title, the full event URL (open the event if "
+        "the link is not visible), date/time, and my status (Going, Hosting, Pending approval, Waitlist). "
+        "Do not register for or change anything.",
+        MyLumaEvents,
+    )
 
 
 def luma_check(url):
@@ -114,6 +160,8 @@ def linkedin_connect(url, note, send):
 def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
+    sub.add_parser("login-check")
+    sub.add_parser("luma-my-events")
     sub.add_parser("luma-check").add_argument("url")
     sub.add_parser("luma-register").add_argument("url")
     sub.add_parser("linkedin-profile").add_argument("who")
@@ -121,7 +169,11 @@ def main():
     c.add_argument("url"); c.add_argument("note"); c.add_argument("--send", action="store_true")
     a = p.parse_args()
 
-    if a.cmd == "luma-check":
+    if a.cmd == "login-check":
+        out = login_check()
+    elif a.cmd == "luma-my-events":
+        out = luma_my_events()
+    elif a.cmd == "luma-check":
         out = luma_check(a.url)
     elif a.cmd == "luma-register":
         out = luma_register(a.url)

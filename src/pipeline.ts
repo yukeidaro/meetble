@@ -14,6 +14,7 @@ import { guess_work_email, summarizeGuessWorkEmail } from "./tools/guess_work_em
 import { recent_web_mentions, summarizeRecentWebMentions } from "./tools/recent_web_mentions.js";
 import { recentXMentions, summarizeRecentXMentions } from "./tools/recent_x_mentions.js";
 import { find_events, summarizeFindEvents } from "./tools/find_events.js";
+import { loginCheck, lumaMyEvents, summarizeLoginCheck, summarizeLumaMyEvents, type LoginCheckResult } from "./tools/browser_session.js";
 import { probe_booking_page, summarizeProbeBookingPage } from "./tools/probe_booking_page.js";
 
 export interface ResearchInput {
@@ -23,6 +24,8 @@ export interface ResearchInput {
   offerInventory?: unknown[];       // from user_profile.json, passed through for Steps 3-5
   targetOverrides?: Partial<Target>; // e.g. known x_handle, to skip guessing
   eventUrls?: string[];             // events the user attends (CLI --event-url / profile my_events)
+  /** Called when the pre-flight check finds sites signed out: ask the human to log in, resolve true to re-check. */
+  waitForLogin?: (check: LoginCheckResult) => Promise<boolean>;
 }
 
 /** Maps a tool to the "dimension" the Steps 3-5 code groups findings by. */
@@ -41,7 +44,17 @@ export function dimensionOf(f: Finding): string {
 export async function runResearch(input: ResearchInput, ctx: ToolContext) {
   const first = input.name.split(/\s+/)[0] ?? input.name;
 
-  // STEP 0
+  // STEP 0: pre-flight. Research signed in wherever possible; the human logs in themselves (never a password from us).
+  let login = await runStep(ctx, "step0.login_check", "Checking you're signed in to Luma, LinkedIn, X and Instagram", () => loginCheck({}, ctx), summarizeLoginCheck);
+  if (login && !login.skipped && (login.signed_out?.length || login.account_mismatch) && input.waitForLogin && (await input.waitForLogin(login))) {
+    login = await runStep(ctx, "step0.login_recheck", "Re-checking sign-ins", () => loginCheck({}, ctx), summarizeLoginCheck);
+  }
+  const lumaOn = login?.sites?.luma?.logged_in === true;
+  const mine = lumaOn
+    ? await runStep(ctx, "step0.luma_my_events", "Reading your upcoming Luma events", () => lumaMyEvents({}, ctx), summarizeLumaMyEvents)
+    : undefined;
+  const eventUrls = [...(input.eventUrls ?? []), ...(mine?.events ?? []).map((e) => e.url)];
+
   const resolved = await runStep(ctx, "step0.resolve_target", `Identifying ${input.name}`,
     () => resolve_target({ name: input.name, hint: input.hint }, ctx), summarizeResolveTarget);
   const target: Target = { ...(resolved?.target ?? { name: input.name }), ...stripUndefined(input.targetOverrides ?? {}) };
@@ -67,7 +80,7 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
   const [webMentions, xMentions, events, booking] = await Promise.all([
     runStep(ctx, "step2.recent_web_mentions", `Checking news about ${first} this week`, () => recent_web_mentions({ target }, ctx), summarizeRecentWebMentions),
     runStep(ctx, "step2.recent_x_mentions", `Checking X posts by and about ${first} this week`, () => recentXMentions({ target }, ctx), summarizeRecentXMentions),
-    runStep(ctx, "step2.find_events", `Finding events ${first} joins before ${input.deadline}`, () => find_events({ target, deadline: input.deadline, eventUrls: input.eventUrls }, ctx), summarizeFindEvents),
+    runStep(ctx, "step2.find_events", `Finding events ${first} joins before ${input.deadline}`, () => find_events({ target, deadline: input.deadline, eventUrls }, ctx), summarizeFindEvents),
     runStep(ctx, "step2.probe_booking_page", `Looking for ${first}'s booking page`, () => probe_booking_page({ target, bioLinks }, ctx), summarizeProbeBookingPage),
   ]);
 
@@ -91,6 +104,8 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
       counts_by_dimension: countBy(findings.map((f) => f.dimension)),
       x_profile: xp ?? null,
       linkedin: li?.data ?? null,
+      logins: login?.sites ?? null,
+      my_events: mine?.events ?? [],
       instagram: ig ?? null,
       web: web ? { count: ctx.findings.byTool("search_web").length } : null,
       podcasts: pods ? { count: ctx.findings.byTool("podcast_quotes").length } : null,
