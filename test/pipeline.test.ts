@@ -28,7 +28,7 @@ describe("runResearch end to end (all services faked)", () => {
     // every started step ends in a terminal state
     const ids = new Set(events.map((e) => e.id));
     for (const id of ids) expect(events.filter((e) => e.id === id).at(-1)?.status).not.toBe("running");
-    expect(ids.size).toBe(12); // 11 API tools + linkedin_profile (skipped: no venv); handle found by Exa so no Grok lookup
+    expect(ids.size).toBe(13); // 11 API tools + login_check + linkedin_profile (both skipped: no venv); handle found by Exa so no Grok lookup
     // Meta outage is reported, not fatal
     expect(events.find((e) => e.id === "step1.instagram_public" && e.status === "error")).toBeTruthy();
   }, 20000);

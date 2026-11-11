@@ -5,6 +5,8 @@ import { loadDotEnv } from "./core/env.js";
 import { FindingStore } from "./core/findings.js";
 import type { Env, StepEvent, ToolContext } from "./core/types.js";
 import { runResearch } from "./pipeline.js";
+import { LOGIN_URLS, type LoginCheckResult } from "./tools/browser_session.js";
+import { createInterface } from "node:readline";
 import { isYmd } from "./tools/xai.js";
 
 // Not process.loadEnvFile: it only exists on Node 20.12+/21.7+, and the CLI must run on Node 18.
@@ -71,7 +73,19 @@ const ctx: ToolContext = {
 const xHandle = arg("x-handle")?.replace(/^@/, "");
 console.log(`Meetble: researching ${name} (deadline ${deadline})\n`);
 const eventUrls: string[] = [...process.argv.flatMap((a, i) => { const v = process.argv[i + 1]; return a === "--event-url" && v ? [v] : []; }), ...profileEvents];
-const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls }, ctx);
+// Pre-flight: if a site is signed out, the human logs in in their own Chrome (we never handle passwords), then presses Enter.
+async function waitForLogin(c: LoginCheckResult): Promise<boolean> {
+  console.log("\nPlease sign in yourself in your Chrome, then come back here:");
+  for (const s of c.signed_out ?? []) console.log(`  - ${s}: ${LOGIN_URLS[s]}`);
+  if (c.account_mismatch) console.log(`  - ${c.account_mismatch}`);
+  if (!process.stdin.isTTY) { console.log("  (not an interactive terminal: continuing without those sites)\n"); return false; }
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  await new Promise<void>((res) => rl.question("Press Enter when you're signed in (or type skip): ", (a) => { rl.close(); res(void (skipLogin = /^s/i.test(a.trim()))); }));
+  console.log("");
+  return !skipLogin;
+}
+let skipLogin = false;
+const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls, waitForLogin }, ctx);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify({ ...result, events_log: events }, null, 2), "utf8");
 console.log(`\n${result.findings.length} findings saved to ${out}`);

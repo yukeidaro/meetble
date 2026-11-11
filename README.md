@@ -2,14 +2,11 @@
 
 Hi people attending Y Combinator Startup School in Taiwan!!
 
-Do you want to meet with Garry tan??
+Do you want to meet with Garry tan?\
 We build AI agents that find the best way to reach out to people you want and do anything it takes to reach out to him.
 
-**We are AI agents that find the best way to reach out to people, and do anything it takes to reach them.**
-
-I built this tonight at the c0mpiled-18 YC Startup School Hackathon in Taipei.
-
-The first prize is office hours with Boris Jabes, so the first person I pointed it at was Boris.
+**We are AI agents that find the best way to reach out to people, and do anything it takes to reach them.**\
+**This agent may suggest you actually present at the event or present at a certain place, but this will definitely help you reach out and meet the person you want.**
 
 ## How it works
 
@@ -84,12 +81,24 @@ python -m plan out\research.json --profile user_profile.json
 
 The first command does the research (Steps 0–2) and writes `out/research.json`. The second one guesses what he wants, asks you questions, and ranks the actions (Steps 3–5). You need Node 18+ and Python 3.10+. For the video, `--answers "a|b|c"` scripts the Step 4 answers. The plan comes out as `out\plan.md`. There's nothing to `npm install` or `pip install`.
 
+### Run it as an app (UI + real pipeline)
+
+```powershell
+node server.mjs
+```
+
+Then open http://localhost:8787. Type who and by when ("Meet Boris Jabes before 22:45 tonight, in person. Budget ¥30,000."), add a hint or X handle if you have one, and press Start research. The server runs both commands above on this computer and streams every checklist line into the UI, then shows the ranked actions as cards. "Copy draft & open" copies the draft and opens the link; you press send yourself. Tick "Reuse the last research run" to skip Steps 0–2 on a retake. If `dist\cli.js` is missing, run `npm install` and then `npm run build` once. Opening `ui/index.html` straight from disk (or adding `?demo=1`) plays the sample run instead.
+
 For Luma and LinkedIn, also install browser-use (`pip install "browser-use[anthropic]"`), turn on remote debugging in Chrome at `chrome://inspect/#remote-debugging`, and stay logged in:
 
 ```powershell
+python browser_tools.py login-check
+python browser_tools.py luma-my-events
 python browser_tools.py luma-check https://luma.com/compiled-poy7
 python browser_tools.py linkedin-profile "Boris Jabes"
 ```
+
+The research run starts with a sign-in check of Luma, LinkedIn, X and Instagram in your Chrome. If a site is signed out, it lists the login pages and waits: you sign in yourself (Meetble never types a password), then press Enter. Set `LUMA_ACCOUNT` in `.env` to warn when Luma is signed in as the wrong account. Your upcoming Luma events are then checked for the target, so an event you're both at tonight shows up. You can also pass an event yourself with `--event-url https://luma.com/compiled-poy7` (repeatable) or a `my_events` list in `user_profile.json`.
 
 ## The demo
 
