@@ -23,6 +23,10 @@ import sys
 
 from pydantic import BaseModel
 
+# browser-use event limits (30 s by default) also cut off the wait for Chrome's Allow prompt. Must be set before import.
+for _ev in ("TIMEOUT_BrowserStartEvent", "TIMEOUT_BrowserLaunchEvent", "TIMEOUT_BrowserConnectedEvent"):
+    os.environ.setdefault(_ev, "150")
+
 # Chrome's remote-debugging mode asks "Allow?" on every new connection, and the CDP client gives up on the
 # WebSocket handshake after ~15 s. Give the person 120 s to click Allow. Patched on the class itself, so it
 # applies however browser-use imported it.
