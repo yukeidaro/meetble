@@ -2,14 +2,11 @@
 
 Hi people attending Y Combinator Startup School in Taiwan!!
 
-Do you want to meet with Garry tan??
+Do you want to meet with Garry tan?\
 We build AI agents that find the best way to reach out to people you want and do anything it takes to reach out to him.
 
-**We are AI agents that find the best way to reach out to people, and do anything it takes to reach them.**
-
-I built this tonight at the c0mpiled-18 YC Startup School Hackathon in Taipei.
-
-The first prize is office hours with Boris Jabes, so the first person I pointed it at was Boris.
+**We are AI agents that find the best way to reach out to people, and do anything it takes to reach them.**\
+**This agent may suggest you actually present at the event or present at a certain place, but this will definitely help you reach out and meet the person you want.**
 
 ## How it works
 
