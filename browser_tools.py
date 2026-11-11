@@ -40,6 +40,19 @@ except Exception:
 
 from browser_use import Agent, Browser, ChatAnthropic
 
+# browser-use 0.13 also wraps connect()/reconnect() in asyncio.wait_for(..., timeout=15.0)
+# (browser_use/browser/session.py). Stretch exactly those 15 s limits so Yu has time to click Allow.
+import asyncio as _asyncio
+_CDP_WAIT = float(os.environ.get("MEETBLE_CDP_WAIT", "120"))
+_orig_wait_for = _asyncio.wait_for
+
+
+async def _patient_wait_for(aw, timeout=None):
+    return await _orig_wait_for(aw, timeout=_CDP_WAIT if timeout == 15.0 else timeout)
+
+
+_asyncio.wait_for = _patient_wait_for
+
 MODEL = os.environ.get("HF_BROWSER_MODEL", "claude-sonnet-5-5")
 
 
