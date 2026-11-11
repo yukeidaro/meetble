@@ -75,8 +75,19 @@ _EMPLOYER = [
 ]
 
 
+def hide_employer():
+    """Off by default (Yu wants the past employer shown). Set HF_HIDE_EMPLOYER=1 in .env to hide it everywhere."""
+    return os.environ.get("HF_HIDE_EMPLOYER", "").strip().lower() in ("1", "true", "yes")
+
+
 def scrub(value):
-    """Recursively replace the former employer's name in strings."""
+    """Recursively replace the former employer's name in strings (only when hide_employer() is on)."""
+    if not hide_employer():
+        return value
+    return _scrub(value)
+
+
+def _scrub(value):
     if isinstance(value, str):
         if value.startswith(("http://", "https://")):
             return value  # keep source links working; they are citations, not prose
@@ -84,9 +95,9 @@ def scrub(value):
             value = rx.sub(rep, value)
         return value
     if isinstance(value, list):
-        return [scrub(v) for v in value]
+        return [_scrub(v) for v in value]
     if isinstance(value, dict):
-        return {scrub(k) if isinstance(k, str) else k: scrub(v) for k, v in value.items()}
+        return {_scrub(k) if isinstance(k, str) else k: _scrub(v) for k, v in value.items()}
     return value
 
 
@@ -229,13 +240,46 @@ def days_until(deadline):
     return to_end_of(d)
 
 
-SHARED_RULES = (
+# Set by __main__ after the consent question at start-up.
+CONSENT = {"given": False}
+
+_BASE_RULES = (
     "Rules: work only from the findings and the user profile given; cite finding ids exactly as given; "
-    "never invent facts, quotes, people or URLs. Write in English. "
-    "Never name or hint at the user's former employer: call it only 'a global big-tech company', never say which "
-    "country office, and never point out that the user and the target share an employer or career history there. "
-    "Respect the profile's 'sensitivities'. Stay on public professional information."
+    "never invent facts, quotes, people or URLs. Write in English. Stay on public professional information. "
 )
+_STRICT = (
+    "The user's past employer may be named, but only as a past achievement (e.g. 'I spent 4 years in Azure GTM at <company>'). "
+    "Never state or imply whether the user still works there: never call the user ex-<company>, a former employee, an alum, "
+    "or say they left or joined somewhere else. Respect the profile's 'sensitivities'."
+)
+_OPEN = (
+    "The user consented to sharing anything in their profile in outreach, including their career history and current status; "
+    "use whatever detail makes the message most specific and credible, as long as it is true to the profile. "
+    "State employment status only as the profile states it. "
+    "Never include a company's confidential information (non-public numbers, customer names)."
+)
+
+
+_NO_STATUS = (
+    " The profile does not say whether the user still works at their past employer, so never say or imply it either way: "
+    "no ex-/former/alum, no 'left', 'leaving', 'quit', 'did it myself', 'before this', 'still at'. "
+    "Describe past roles only as achievements ('I spent 4 years in Azure GTM at <company>')."
+)
+
+
+def profile_states_status(profile):
+    """True if the profile says where the user works now (e.g. employment_status or current_employer)."""
+    p = profile if isinstance(profile, dict) else {}
+    return any(str(p.get(k) or "").strip() for k in ("employment_status", "current_employer"))
+
+
+def rules():
+    if not CONSENT.get("given"):
+        return _BASE_RULES + _STRICT
+    return _BASE_RULES + _OPEN + ("" if CONSENT.get("status_known") else _NO_STATUS)
+
+
+SHARED_RULES = _BASE_RULES + _STRICT  # kept for imports; prompts call rules() at run time
 
 
 def scrub_output(state):
@@ -244,3 +288,14 @@ def scrub_output(state):
     out = scrub({k: v for k, v in state.items() if k != "findings"})
     out["findings"] = findings
     return out
+
+
+# Words that state the user's employment status ("ex-Microsoft", "alum", "left ...").
+_EMP = r"(?:Microsoft|MSFT|Azure|マイクロソフト)"
+_STATUS_RX = re.compile(r"\bex-?\s?" + _EMP + r"|" + _EMP + r"\s+alum\w*|\balum(?:na|nus|ni)?\b|\bformer(?:ly)?\s+(?:at\s+)?" + _EMP
+                        + r"|\b(?:left|leaving|quit(?:ting)?)\s+" + _EMP + r"|\bstill\s+(?:at|work(?:ing)?\s+at)\s+" + _EMP, re.I)
+
+
+def employment_status_words(text_value):
+    """Phrases in a draft that state whether the user still works somewhere (profile sensitivity)."""
+    return sorted({m.group(0) for m in _STATUS_RX.finditer(text_value or "")})

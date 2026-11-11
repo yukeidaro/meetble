@@ -2,7 +2,7 @@
 import json
 
 from . import llm
-from .common import (S, N, I, SHARED_RULES, num, text, arr, context_block, emit, finding_ids, keep_known, obj, scrub)
+from .common import (rules, S, N, I, SHARED_RULES, num, text, arr, context_block, emit, finding_ids, keep_known, obj, scrub)
 
 MAX_Q = 3
 
@@ -24,7 +24,7 @@ M_SCHEMA = obj({
 SYSTEM = (
     "You are the interviewer of Meetble, an agent that finds the best way for a founder to reach one person. "
     "Step 4 runs after the research: ask the user only what the research cannot answer. "
-    + SHARED_RULES
+
 )
 
 
@@ -45,7 +45,7 @@ def make_questions(state, profile):
   not something already in the profile
 - be answerable in one line; give 2-4 short answer_chips (likely answers) the UI can show as buttons
 Order by how much the answer would change the plan."""
-    out = llm.call_json(SYSTEM, context_block(state, profile) + _needs_block(state) + _offers_block(state, profile) + task, Q_SCHEMA)
+    out = llm.call_json(SYSTEM + rules(), context_block(state, profile) + _needs_block(state) + _offers_block(state, profile) + task, Q_SCHEMA)
     known = finding_ids(state)
     out = scrub(out) if isinstance(out, dict) else {}
     qs = []
@@ -95,7 +95,7 @@ add new ones, drop ones the answers contradict). strength: 1 weak, 2 solid, 3 st
 Then match every need to the best offer: match 0-1 (0 = nothing fits), with a one-line reason. Use need ids exactly as given."""
     user = (context_block(state, profile) + _needs_block(state) + _offers_block(state, profile)
             + "<interview>\n" + json.dumps(scrub(interview), ensure_ascii=False, indent=1) + "\n</interview>\n" + task)
-    out = scrub(llm.call_json(SYSTEM, user, M_SCHEMA))
+    out = scrub(llm.call_json(SYSTEM + rules(), user, M_SCHEMA))
     out = out if isinstance(out, dict) else {}
 
     offers = []

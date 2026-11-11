@@ -2,8 +2,10 @@
 import json
 
 from . import llm
-from .common import (S, N, SHARED_RULES, num, text, arr, context_block, contains_employer, days_until, emit,
+from .common import (rules, S, N, SHARED_RULES, num, text, arr, context_block, contains_employer, days_until, emit,
                      finding_ids, keep_known, obj, scrub)
+from .common import CONSENT, employment_status_words
+from .common import hide_employer as common_hide
 from .scoring import ACTION_TYPES, BASE_RANGE, MULT_RANGE, pct, score_action, total_chance
 
 SCHEMA = obj({
@@ -32,7 +34,7 @@ SCHEMA = obj({
 SYSTEM = (
     "You are the strategist of Meetble, an agent that finds the best way for a founder to reach one person. "
     "Step 5: propose concrete actions and score them with a base rate and four multipliers. Never output a final %; code computes it. "
-    + SHARED_RULES
+
 )
 
 
@@ -95,7 +97,7 @@ summary: one sentence on the best route."""
         + "<offer_inventory>\n" + json.dumps(scrub(state.get("offer_inventory", [])), ensure_ascii=False, indent=1) + "\n</offer_inventory>\n"
         + "<interview>\n" + json.dumps(scrub(state.get("interview", [])), ensure_ascii=False, indent=1) + "\n</interview>\n"
     )
-    out = scrub(llm.call_json(SYSTEM, blocks + task, SCHEMA, max_tokens=32000))
+    out = scrub(llm.call_json(SYSTEM + rules(), blocks + task, SCHEMA, max_tokens=32000))
     out = out if isinstance(out, dict) else {}
     known = finding_ids(state)
     need_ids = {n.get("id") for n in state.get("needs", [])}
@@ -144,10 +146,16 @@ summary: one sentence on the best route."""
                              "while their combined cost stays within budget; assumes the actions are independent.")
 
     for a in actions:
+        # With consent, status words are fine only when the profile states the status; otherwise they are a guess.
+        words = [] if CONSENT.get("given") and CONSENT.get("status_known") else employment_status_words(a.get("draft", ""))
+        if words:  # flagged on the card so Yu edits before sending; not silently rewritten
+            a.setdefault("flags", []).append("draft states your employment status: " + ", ".join(words))
+            emit(5, f"Check draft for {a['id']}", "error", "mentions " + ", ".join(words) + "; edit before sending")
+    for a in actions:
         flag = "" if a.get("in_total") else (" · too late" if not a["fits_deadline"] else " · over budget")
         emit(5, f"{pct(a['p']):>4}  {a['title'][:80]}", "done",
              f"¥{a['cost_jpy']:,} · {a['hours']}h · {a['days_to_outcome']}d{flag}")
-    if contains_employer(actions):  # should never happen; scrub() runs on the model output
+    if common_hide() and contains_employer(actions):  # should never happen; scrub() runs on the model output
         emit(5, "Outward text check", "error", "former employer name found in drafts")
     emit(5, "Rank the actions with a % each", "done", f"chance of reaching them by the deadline: {pct(state['p_total'])}")
     return state

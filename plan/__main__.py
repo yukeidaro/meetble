@@ -5,6 +5,9 @@ PowerShell:
   python -m plan out\\research.json --profile user_profile.json --out out\\plan.json
   python -m plan out\\research.json --answers "Yes, 20 data teams use us|No|Yes, I'm at the venue"
   python -m plan out\\research.json --no-interview
+
+.env: ANTHROPIC_API_KEY (required). Optional: HF_EFFORT=low|medium|high, HF_MODEL, HF_TIMEOUT_S,
+HF_HIDE_EMPLOYER=1 (replace the user's past employer name with "a global big-tech company").
 """
 import argparse
 import json
@@ -28,6 +31,24 @@ def find_profile(explicit, research_path):
     if explicit:
         sys.exit(f"Profile not found: {explicit}")
     return {}, None
+
+
+def ask_consent(preset, profile_path):
+    """Ask once, before anything is sent to Claude, whether drafts may use the user's profile freely."""
+    import datetime as dt
+    if preset:
+        given = preset == "yes"
+    else:
+        print()
+        print("Meetble will read your profile" + (f" ({os.path.basename(profile_path)})" if profile_path else "")
+              + " and may use any of it (career history, current status, projects, links) in drafted messages to the target.")
+        try:
+            a = input("Do you agree? [Y/n]: ").strip().lower()
+        except EOFError:
+            a = "n"
+        given = a in ("", "y", "yes")
+    return {"given": given, "scope": "use any profile detail in outreach drafts",
+            "at": dt.datetime.now().isoformat(timespec="seconds")}
 
 
 def parse_answers(s):
@@ -73,6 +94,8 @@ def write_report(state, path):
             L.append(f"1. {h}")
         if a.get("channel_url"):
             L.append(f"Link: {a['channel_url']}")
+        for fl in a.get("flags", []):
+            L.append(f"**Check:** {fl}")
         if a.get("draft"):
             L += ["", "> " + a["draft"].replace("\n", "\n> ")]
     if state.get("sequence"):
@@ -93,6 +116,7 @@ def main(argv=None):
     ap.add_argument("--out", default=os.path.join("out", "plan.json"))
     ap.add_argument("--answers", help='Step 4 answers: "a|b|c" or a JSON file with a list')
     ap.add_argument("--no-interview", action="store_true", help="skip the Step 4 questions")
+    ap.add_argument("--consent", choices=["yes", "no"], help="answer the start-up consent question in advance")
     args = ap.parse_args(argv)
 
     env = llm.load_env()
@@ -104,6 +128,10 @@ def main(argv=None):
         profile = {}
     common.emit(3, "Load research and profile", "done",
                 f"{len(state['findings'])} findings, profile: {os.path.basename(ppath) if ppath else 'none'}, .env: {'found' if env else 'not found'}")
+    state["consent"] = ask_consent(args.consent, ppath)
+    common.CONSENT.update(state["consent"], status_known=common.profile_states_status(profile))
+    common.emit(0, "Consent to use your profile in outreach", "done" if state["consent"]["given"] else "skipped",
+                "yes: drafts may use any profile detail" if state["consent"]["given"] else "no: strict mode (no current-employment status)")
     if not state.get("offer_inventory") and profile.get("offer_inventory_draft"):
         state["offer_inventory"] = common.scrub(profile["offer_inventory_draft"])
 

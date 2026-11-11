@@ -1,6 +1,6 @@
 """Step 3: guess what the target wants, and when they are available."""
 from . import llm
-from .common import (S, N, SHARED_RULES, num, text, arr, context_block, emit, finding_ids, keep_known, obj, scrub)
+from .common import (rules, S, N, SHARED_RULES, num, text, arr, context_block, emit, finding_ids, keep_known, obj, scrub)
 
 NEED_TYPES = ["money", "network", "idea", "gift", "help"]
 
@@ -25,7 +25,7 @@ SCHEMA = obj({
 SYSTEM = (
     "You are the needs analyst of Meetble, an agent that finds the best way for a founder to reach one person. "
     "Step 3: from the research, guess what the target wants right now and when they can be reached. "
-    + SHARED_RULES
+
 )
 
 TASK = """Do Step 3 for the target in research_context.goal.
@@ -50,7 +50,7 @@ def run(state, profile):
     live = live_booking_urls(state)
     note = (f"Booking pages verified as live: {live}." if live else
             "No booking page was verified as live: if one is listed, call it 'found but not verified as in use', never 'verified'.")
-    out = llm.call_json(SYSTEM, context_block(state, profile) + "\n" + note + "\n" + TASK, SCHEMA)
+    out = llm.call_json(SYSTEM + rules(), context_block(state, profile) + "\n" + note + "\n" + TASK, SCHEMA)
     out = scrub(out)
     known = finding_ids(state)
 

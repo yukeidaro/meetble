@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 
+os.environ["HF_HIDE_EMPLOYER"] = "1"  # the scrub tests check the optional hide mode
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from plan import __main__ as cli, common, llm, scoring, step3_needs, step4_interview, step5_actions  # noqa: E402
 
@@ -122,7 +123,7 @@ class PlanTests(unittest.TestCase):
             out = os.path.join(d, "plan.json")
             buf = io.StringIO()
             with redirect_stdout(buf):
-                rc = cli.main([SAMPLE, "--out", out, "--answers", "Yes|No|Maybe"])
+                rc = cli.main([SAMPLE, "--out", out, "--answers", "Yes|No|Maybe", "--consent", "no"])
             self.assertEqual(rc, 0, buf.getvalue())
             with open(out, encoding="utf-8") as f:
                 data = json.load(f)
@@ -202,7 +203,7 @@ class RobustnessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             out = os.path.join(d, "plan.json")
             with redirect_stdout(io.StringIO()):
-                rc = cli.main([p, "--out", out, "--no-interview"])
+                rc = cli.main([p, "--out", out, "--no-interview", "--consent", "no"])
             self.assertEqual(rc, 0)
             with open(out, encoding="utf-8") as f:
                 self.assertFalse(common.contains_employer(json.load(f)))
@@ -214,7 +215,7 @@ class RobustnessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             out = os.path.join(d, "plan.json")
             with redirect_stdout(io.StringIO()):
-                rc = cli.main([SAMPLE, "--out", out, "--no-interview"])
+                rc = cli.main([SAMPLE, "--out", out, "--no-interview", "--consent", "no"])
             self.assertEqual(rc, 2)
             self.assertTrue(os.path.isfile(out))
 
@@ -283,7 +284,7 @@ class CopilotReviewTests(unittest.TestCase):
             with tempfile.TemporaryDirectory() as d:
                 out = os.path.join(d, "result.md")
                 with redirect_stdout(io.StringIO()):
-                    cli.main([SAMPLE, "--out", out, "--no-interview"])
+                    cli.main([SAMPLE, "--out", out, "--no-interview", "--consent", "no"])
                 with open(out, encoding="utf-8") as f:
                     json.load(f)
                 self.assertTrue(os.path.isfile(os.path.join(d, "result.report.md")))
@@ -321,3 +322,61 @@ class BookingLiveTests(unittest.TestCase):
     def test_live_booking_page_keeps_score(self):
         s = self._run([{"url": "https://calendly.com/x", "live": True}])
         self.assertGreater(s["actions"][0]["p"], 0.5)
+
+
+class EmployerShownByDefaultTests(unittest.TestCase):
+    def test_default_keeps_employer(self):
+        os.environ.pop("HF_HIDE_EMPLOYER", None)
+        try:
+            self.assertEqual(common.scrub("4 years at Microsoft Japan"), "4 years at Microsoft Japan")
+            self.assertIn("past employer may be named", common.SHARED_RULES)
+        finally:
+            os.environ["HF_HIDE_EMPLOYER"] = "1"
+
+
+class EmploymentStatusTests(unittest.TestCase):
+    def test_status_words_flagged(self):
+        self.assertEqual(common.employment_status_words("fellow Microsoft alum here, ex-Microsoft founder"), ["Microsoft alum", "ex-Microsoft"])
+        self.assertEqual(common.employment_status_words("I spent 4 years in Azure GTM at Microsoft."), [])
+
+
+class ConsentTests(unittest.TestCase):
+    def tearDown(self):
+        common.CONSENT.clear()
+        common.CONSENT["given"] = False
+
+    def test_rules_follow_consent(self):
+        self.assertIn("never call the user ex-", common.rules())
+        common.CONSENT["given"] = True
+        self.assertIn("consented", common.rules())
+        self.assertIn("only as the profile states it", common.rules())
+
+    def test_cli_consent_flag_recorded(self):
+        orig = llm.call_json
+        llm.call_json = fake_call_json
+        try:
+            with tempfile.TemporaryDirectory() as d:
+                out = os.path.join(d, "plan.json")
+                with redirect_stdout(io.StringIO()):
+                    cli.main([SAMPLE, "--out", out, "--no-interview", "--consent", "yes"])
+                with open(out, encoding="utf-8") as f:
+                    self.assertTrue(json.load(f)["consent"]["given"])
+        finally:
+            llm.call_json = orig
+
+
+class ConsentStatusTests(unittest.TestCase):
+    def tearDown(self):
+        common.CONSENT.clear()
+        common.CONSENT["given"] = False
+
+    def test_consent_without_status_still_guards_status(self):
+        common.CONSENT.update(given=True, status_known=False)
+        self.assertIn("does not say whether", common.rules())
+        self.assertEqual(common.employment_status_words("your piece on leaving Microsoft for a startup"), ["leaving Microsoft"])
+        self.assertFalse(common.profile_states_status({"name": "Yu"}))
+        self.assertTrue(common.profile_states_status({"employment_status": "left in 2026"}))
+
+    def test_consent_with_status_is_open(self):
+        common.CONSENT.update(given=True, status_known=True)
+        self.assertNotIn("does not say whether", common.rules())
