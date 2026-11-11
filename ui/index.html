@@ -1,0 +1,1156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meetble</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one quiet centered column (ask → link accounts), then two columns (live checklist + chat | board). A dotted particle sphere is the agent; an aurora glow sits behind. */
+:root{
+  --bg:#FAFAFB; --surface:#FFFFFF; --ink:#0F0F14; --muted:#6B6B76; --faint:#A8A8B2; --line:#ECECF0; --soft:#F3F3F6;
+  --a1:#5A4BFF; --a2:#FF6A2B; --a3:#D9CCFF; --ok:#10966C; --warn:#B4690E;
+  --shadow:0 1px 2px rgba(15,15,30,.04),0 16px 40px -18px rgba(40,30,120,.16);
+  --f:"Geist",-apple-system,BlinkMacSystemFont,"Helvetica Neue",system-ui,sans-serif;
+  --fm:"Geist Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#08080B; --surface:#111116; --ink:#F2F2F5; --muted:#9A9AA6; --faint:#55555F; --line:#1E1E26; --soft:#17171D;
+  --a1:#7D71FF; --a2:#FF7A3D; --a3:#2A2150; --ok:#38CF9A; --warn:#F0AE4E;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 40px -18px rgba(0,0,0,.7); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#08080B; --surface:#111116; --ink:#F2F2F5; --muted:#9A9AA6; --faint:#55555F; --line:#1E1E26; --soft:#17171D;
+  --a1:#7D71FF; --a2:#FF7A3D; --a3:#2A2150; --ok:#38CF9A; --warn:#F0AE4E;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 16px 40px -18px rgba(0,0,0,.7); color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.details{display:grid;gap:8px;margin:18px auto 6px;max-width:560px}
+.details input:not([type]){font:inherit;font-size:13.5px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.details .reuse{font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center}
+.details .mode{font-size:11.5px;color:var(--faint)}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f);font-size:14px;line-height:1.55;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;font-feature-settings:"ss01","cv11";
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent}
+:focus-visible{outline:2px solid var(--a1);outline-offset:2px;border-radius:10px}
+.mono{font-family:var(--fm)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}
+
+/* aurora */
+.aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+.aurora i{position:absolute;border-radius:50%;filter:blur(80px);opacity:.55;animation:float 22s ease-in-out infinite}
+.aurora i:nth-child(1){width:46vmax;height:30vmax;left:8%;top:-8vmax;background:var(--a3)}
+.aurora i:nth-child(2){width:26vmax;height:20vmax;right:6%;top:12vh;background:var(--a1);opacity:.14;animation-delay:-7s}
+.aurora i:nth-child(3){width:24vmax;height:18vmax;left:30%;top:30vh;background:var(--a2);opacity:.10;animation-delay:-14s}
+body.s-run .aurora i{opacity:.25} body.s-run .aurora i:nth-child(n+2){opacity:.06}
+@keyframes float{50%{transform:translate(4vmax,3vmax) scale(1.08)}}
+
+/* top bar */
+.top{display:flex;justify-content:space-between;align-items:center;max-width:1260px;margin:0 auto;padding-block:18px}
+.brand{font-weight:600;letter-spacing:-.01em;font-size:15px;display:flex;gap:9px;align-items:center}
+.brand svg{width:18px;height:18px}
+.top-r{display:flex;gap:6px;align-items:center}
+.tbtn{font-size:12.5px;border:0;background:transparent;border-radius:999px;padding:6px 12px;color:var(--muted)}
+.tbtn:hover{background:var(--soft);color:var(--ink)}
+.sample{font-family:var(--fm);font-size:11px;color:var(--faint);letter-spacing:.02em;padding:0 8px}
+
+/* ---------- intro: ask + link accounts ---------- */
+#intro{max-width:720px;margin:0 auto;display:flex;flex-direction:column;align-items:center;padding-block:3vh 48px}
+.orb-wrap{width:320px;height:320px;margin:-30px 0 -40px;transition:width .8s cubic-bezier(.2,.8,.2,1),height .8s cubic-bezier(.2,.8,.2,1),margin .8s}
+body.s-connect .orb-wrap{width:170px;height:170px;margin:-24px 0 -30px}
+.orb-wrap canvas{width:100%;height:100%;display:block}
+.kicker{font-family:var(--fm);font-size:11.5px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin-top:6px}
+.hello{font-size:clamp(34px,5.2vw,56px);font-weight:200;letter-spacing:-.035em;text-align:center;margin:8px 0 30px;line-height:1.05;text-wrap:balance}
+.hello b{font-weight:500}
+.ask{width:100%;display:flex;flex-direction:column;gap:12px}
+.ask-bar{display:flex;align-items:flex-end;gap:10px;padding:8px 8px 8px 22px;border-radius:30px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);transition:box-shadow .3s,border-color .3s}
+.ask-bar:focus-within{border-color:color-mix(in srgb,var(--a1) 35%,var(--line));box-shadow:0 0 0 5px color-mix(in srgb,var(--a1) 9%,transparent),var(--shadow)}
+.ask-bar textarea{flex:1;min-width:0;border:0;background:transparent;resize:none;outline:none;font-size:16.5px;line-height:1.5;padding:12px 0;max-height:160px;font-weight:400}
+.ask-bar textarea::placeholder{color:var(--faint)}
+.send{width:48px;height:48px;border-radius:50%;border:0;display:grid;place-items:center;flex:none;background:var(--ink);color:var(--bg);transition:transform .2s}
+.send:hover{transform:scale(1.05)}
+.wave{display:flex;gap:2.5px;align-items:center;height:16px}
+.wave span{width:2px;border-radius:2px;background:currentColor;height:45%;animation:wv 1.2s ease-in-out infinite}
+.wave span:nth-child(2){animation-delay:-.2s;height:85%}.wave span:nth-child(3){animation-delay:-.4s;height:60%}.wave span:nth-child(4){animation-delay:-.6s;height:100%}.wave span:nth-child(5){animation-delay:-.8s;height:50%}
+@keyframes wv{50%{transform:scaleY(.4)}}
+.hint{color:var(--faint);font-size:13px;padding:0 22px;line-height:1.75}
+.hint b{font-weight:500;color:var(--muted)}
+.try{border:0;background:none;color:var(--ink);font-size:13px;padding:0;margin-left:6px;text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--faint)}
+
+.said{display:none;align-self:stretch;padding:14px 20px;font-size:15px;line-height:1.5}
+.said small{display:block;font-family:var(--fm);color:var(--faint);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px}
+body.s-connect .ask{display:none}
+body.s-connect .said{display:block;animation:rise .6s cubic-bezier(.2,.8,.2,1)}
+body.s-connect .hello{margin-bottom:22px}
+
+.connect{display:none;width:100%;flex-direction:column;gap:18px;margin-top:22px;animation:rise .7s .1s cubic-bezier(.2,.8,.2,1) both}
+body.s-connect .connect{display:flex}
+@keyframes rise{from{opacity:0;transform:translateY(16px)}}
+.connect .sub{margin:0;color:var(--muted);text-align:center;font-size:14px}
+.accts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.acct{position:relative;border:1px dashed color-mix(in srgb,var(--faint) 70%,transparent);background:transparent;border-radius:18px;padding:18px 8px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;transition:transform .25s,background .3s,border-color .3s,box-shadow .3s}
+.acct:hover{transform:translateY(-2px)}
+.acct .ic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-family:var(--fm);font-weight:500;font-size:13.5px;color:var(--faint);background:var(--soft);transition:all .3s}
+.acct .nm{font-weight:500;font-size:13.5px;color:var(--muted)}
+.acct .st{font-size:11.5px;color:var(--faint);display:flex;align-items:center;gap:5px}
+.acct.on{border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow)}
+.acct.on .ic{background:var(--ink);color:var(--bg)}
+.acct.on .nm{color:var(--ink)}
+.acct.on .st{color:var(--ok)}
+.acct.on .st::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--ok)}
+.depth{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;align-items:center;padding:4px 6px}
+.depth .lbl{font-size:13px;font-weight:500;white-space:nowrap}
+.depth .lbl span{font-family:var(--fm);color:var(--muted);font-weight:400;margin-left:4px}
+.pips{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}
+.pips i{height:4px;border-radius:2px;background:var(--line);transition:background .4s}
+.pips i.lit{background:linear-gradient(90deg,var(--a1),color-mix(in srgb,var(--a1) 40%,var(--a2)))}
+.pips i.lit:nth-child(n+5){background:linear-gradient(90deg,color-mix(in srgb,var(--a1) 40%,var(--a2)),var(--a2))}
+.depth .tracks{grid-column:2;font-size:12px;color:var(--faint)}
+.go{align-self:center;border:0;border-radius:999px;padding:15px 34px;font-weight:500;font-size:15px;color:var(--bg);background:var(--ink);box-shadow:0 12px 30px -12px color-mix(in srgb,var(--a1) 60%,transparent);transition:transform .2s;display:inline-flex;gap:10px;align-items:center;margin-top:4px}
+.go:hover{transform:translateY(-1px)}
+
+/* ---------- run ---------- */
+#run{display:none;max-width:1260px;margin:0 auto;grid-template-columns:minmax(0,.95fr) minmax(0,1.05fr);gap:24px;padding-block:0 28px;align-items:start}
+body.s-run #intro{display:none}
+body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
+.left{display:flex;flex-direction:column;gap:14px;min-width:0;position:sticky;top:12px;height:calc(100vh - 92px)}
+.agent{display:flex;align-items:center;gap:12px}
+.agent canvas{width:64px;height:64px;flex:none;margin:-8px}
+.agent b{font-size:15px;font-weight:600;display:block;letter-spacing:-.01em}
+.agent span{color:var(--muted);font-size:13px}
+.feed{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:2px 2px 8px;min-height:0;scrollbar-width:thin}
+.me{align-self:flex-end;max-width:86%;padding:11px 16px;border-radius:20px 20px 6px 20px;background:var(--ink);color:var(--bg);font-size:14px}
+.list{padding:6px 18px 14px}
+.grp{font-family:var(--fm);font-size:10.5px;letter-spacing:.08em;color:var(--faint);margin:16px 0 6px;text-transform:uppercase}
+.ln{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;padding:6px 0}
+.ln .ico{width:18px;height:18px;margin-top:1px;display:grid;place-items:center}
+.ln .ico svg{width:16px;height:16px}
+.ln .t{min-width:0}
+.ln .t button{all:unset;cursor:pointer}
+.ln .t button:hover{text-decoration:underline;text-decoration-color:var(--faint);text-underline-offset:3px}
+.ln .note{color:var(--muted)}
+.ln.none .t>span:first-child,.ln.none .t>button{color:var(--muted)}
+.ln.locked .t{color:var(--faint)}
+.via{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--a1);background:color-mix(in srgb,var(--a1) 9%,transparent);border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:1px;font-weight:500}
+.via::before{content:"";width:5px;height:5px;border-radius:50%;background:currentColor}
+.spin{width:14px;height:14px;border-radius:50%;border:1.6px solid var(--line);border-top-color:var(--ink);animation:rot .7s linear infinite}
+@keyframes rot{to{transform:rotate(360deg)}}
+.layers{grid-column:2;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:8px 0 4px}
+.layer{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--faint)}
+.layer i{height:2px;border-radius:1px;background:var(--line);position:relative;overflow:hidden}
+.layer i::after{content:"";position:absolute;inset:0;width:0;background:var(--ink);transition:width .5s}
+.layer.on i::after{width:100%}
+.layer.cur i::after{width:55%;background:var(--a1);animation:load 1s ease-in-out infinite alternate}
+@keyframes load{from{width:15%}to{width:80%}}
+.layer b{font-weight:500;color:var(--muted)}
+.layer.on b{color:var(--ink)}
+.layer span{font-family:var(--fm);font-size:11px}
+.layer.on span{color:var(--muted)}
+
+.q{padding:20px 22px;animation:rise .5s cubic-bezier(.2,.8,.2,1)}
+.q .n{font-family:var(--fm);font-size:10.5px;color:var(--faint);letter-spacing:.08em;text-transform:uppercase}
+.q h3{margin:8px 0 6px;font-size:21px;font-weight:300;letter-spacing:-.02em;line-height:1.3}
+.q h3 b{font-weight:500}
+.q .why{font-size:12.5px;color:var(--muted);margin:0 0 14px}
+.q .why::before{content:"Based on: ";color:var(--faint)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 15px;font-size:13px;transition:all .2s}
+.chip:hover:not(:disabled){border-color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip:disabled:not([aria-pressed="true"]){opacity:.4;cursor:default}
+.reply{padding:0 4px;font-size:15px;line-height:1.6;animation:rise .5s ease}
+.composer{display:flex;gap:8px;align-items:center;padding:6px 6px 6px 20px;border-radius:26px}
+.composer input{flex:1;min-width:0;border:0;background:transparent;outline:none;padding:10px 0;font-size:14.5px}
+.composer input::placeholder{color:var(--faint)}
+.composer .send{width:40px;height:40px}
+
+.right{display:flex;flex-direction:column;gap:14px;min-width:0}
+.tabs{display:flex;gap:2px;padding:3px;border-radius:999px;align-self:flex-start;background:var(--soft)}
+.tab{border:0;background:transparent;border-radius:999px;padding:7px 16px;font-size:13px;color:var(--muted);font-weight:500;transition:all .2s}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.tab:disabled{opacity:.45;cursor:default}
+.tab .cnt{font-family:var(--fm);font-size:11px;margin-left:6px;color:var(--faint)}
+.pane{display:flex;flex-direction:column;gap:14px}
+.box{padding:20px 22px}
+.box h3{margin:0 0 6px;font-family:var(--fm);font-size:10.5px;font-weight:500;color:var(--faint);letter-spacing:.08em;text-transform:uppercase;display:flex;justify-content:space-between}
+.wait-txt{color:var(--faint);font-size:13px;padding:6px 0}
+.persona{display:flex;gap:16px;align-items:center;margin:10px 0 6px}
+.avatar{width:54px;height:54px;border-radius:50%;flex:none;display:grid;place-items:center;font-weight:500;font-size:17px;color:#fff;background:radial-gradient(circle at 30% 30%,var(--a2),var(--a1) 75%)}
+.persona .nm{font-size:26px;font-weight:300;letter-spacing:-.03em;line-height:1.15}
+.persona .rl{color:var(--muted);font-size:13.5px}
+.fact{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;padding:11px 0;border-top:1px solid var(--line);animation:rise .45s cubic-bezier(.2,.8,.2,1);font-size:14px}
+.facts .fact:first-child{border-top:0}
+.fact .src{font-family:var(--fm);font-size:11px;color:var(--faint);white-space:nowrap;padding-top:2px}
+.fact a.src{text-decoration:none}.fact a.src:hover{color:var(--ink)}
+
+.total{padding:24px 24px 20px;display:flex;flex-direction:column;gap:16px}
+.total .row{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.total .big{font-size:84px;font-weight:200;line-height:.85;letter-spacing:-.05em;font-variant-numeric:tabular-nums}
+.total .big sup{font-size:.4em;font-weight:300;vertical-align:.95em;margin-left:2px;color:var(--muted)}
+.total .cap{color:var(--muted);font-size:22px;letter-spacing:-.02em;line-height:1.2;text-align:right}
+.total .cap b{color:var(--ink);font-weight:600}
+.meter{height:4px;border-radius:2px;background:var(--line);overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--a1),var(--a2));transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.filters{display:flex;flex-wrap:wrap;gap:6px}
+.filters .chip{padding:6px 13px;font-size:12.5px}
+.acts{display:flex;flex-direction:column;gap:10px}
+.act{padding:16px 18px;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 14px;align-items:start;transition:border-color .25s,box-shadow .25s,opacity .3s;animation:rise .5s cubic-bezier(.2,.8,.2,1) both}
+.act.sel{border-color:var(--ink)}
+.act.late{opacity:.5;box-shadow:none}
+.pick{appearance:none;-webkit-appearance:none;width:20px;height:20px;border-radius:50%;border:1.5px solid var(--faint);margin:2px 0 0;display:grid;place-items:center;cursor:pointer;transition:all .2s}
+.pick:checked{background:var(--ink);border-color:var(--ink)}
+.pick:checked::after{content:"";width:6px;height:10px;border:solid var(--bg);border-width:0 1.8px 1.8px 0;transform:translate(0,-1px) rotate(45deg)}
+.pick:disabled{cursor:not-allowed}
+.act .tt{font-weight:500;font-size:15px;line-height:1.4;letter-spacing:-.01em;cursor:pointer}
+.act .meta{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:7px;font-size:12px;color:var(--muted);align-items:center}
+.act .meta .mono{font-size:11.5px}
+.out{font-size:11.5px;font-weight:500;border-radius:999px;padding:2px 10px;background:var(--soft);color:var(--ink)}
+.out.call{background:color-mix(in srgb,var(--a1) 11%,transparent);color:var(--a1)}
+.out.face{background:color-mix(in srgb,var(--a2) 13%,transparent);color:var(--warn)}
+.late-tag{font-size:11.5px;color:var(--warn)}
+.act{align-items:center}
+.act .main{min-width:0}
+.act .side{display:flex;justify-content:flex-end}
+.pbar{display:flex;align-items:center;gap:10px;margin-top:10px}
+.pbar .trk{flex:1;height:6px;border-radius:3px;background:var(--soft);overflow:hidden}
+.pbar .trk i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--a1),var(--a2));transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.act.late .pbar .trk i{background:var(--faint)}
+.pbar .n{font-variant-numeric:tabular-nums;font-size:14px;font-weight:500;min-width:46px;text-align:right}
+.act .body{grid-column:2/-1;font-size:13px}
+.act details summary{margin-top:2px}
+.kind{display:inline-flex;gap:6px;align-items:center;font-size:11.5px;font-weight:500;color:var(--ink)}
+.kind::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--a1)}
+.kind.you::before{background:var(--a2)}
+.next{padding:24px 26px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px 24px;align-items:start;position:relative;overflow:hidden;border-color:color-mix(in srgb,var(--a1) 30%,var(--line))}
+.next::before{content:"";position:absolute;width:70%;height:180%;right:-20%;top:-40%;background:radial-gradient(closest-side,color-mix(in srgb,var(--a3) 70%,transparent),transparent);pointer-events:none;z-index:0}
+.next>*{position:relative;z-index:1}
+.next .lab{font-family:var(--fm);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--a1)}
+.next h2{margin:8px 0 6px;font-size:26px;font-weight:400;letter-spacing:-.03em;line-height:1.2;text-wrap:balance}
+.next p{margin:0;color:var(--muted);font-size:13.5px}
+.next .pc{font-size:64px;font-weight:200;letter-spacing:-.05em;line-height:.9;font-variant-numeric:tabular-nums}
+.next .pc sup{font-size:.4em;color:var(--muted);vertical-align:1em}
+.next .btns,.next .confirm{grid-column:1/-1;margin-top:0}
+.do.big{padding:14px 26px;font-size:15px}
+.total{padding:18px 22px}
+.total .big{font-size:44px}
+.fact.kv{grid-template-columns:92px minmax(0,1fr) auto}
+.fact .k{font-size:12.5px;color:var(--faint)}
+.deck{position:relative;padding-bottom:20px;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.deck::before,.deck::after{content:"";position:absolute;bottom:10px;left:4%;right:4%;height:60px;border-radius:20px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow);z-index:0}
+.deck::after{bottom:0;left:8%;right:8%;opacity:.55}
+.deck.one::before,.deck.one::after,.deck.two::after{display:none}
+.dcard{position:relative;z-index:1;padding:24px 26px 20px;display:flex;flex-direction:column;gap:12px;user-select:text;-webkit-user-select:text}
+.dcard.in-r{animation:inr .45s cubic-bezier(.2,.8,.2,1)}
+.dcard.in-l{animation:inl .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes inr{from{opacity:0;transform:translateX(48px) rotate(1.5deg)}}
+@keyframes inl{from{opacity:0;transform:translateX(-48px) rotate(-1.5deg)}}
+.dcard.late{opacity:.7}
+.dcard .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.dcard .top .meta{margin:0}
+.rank{font-family:var(--fm);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint)}
+.dcard .pc{font-size:84px;font-weight:200;letter-spacing:-.05em;line-height:.9;font-variant-numeric:tabular-nums;margin-top:6px;display:flex;align-items:flex-start;gap:4px}
+.dcard .pc sup{font-size:.36em;color:var(--muted);margin-top:.2em}
+.dcard .pc span{font-size:13px;letter-spacing:0;font-weight:400;color:var(--muted);align-self:flex-end;margin:0 0 10px 10px}
+.dcard h2{margin:0;font-size:24px;font-weight:400;letter-spacing:-.03em;line-height:1.25;text-wrap:balance}
+.dcard .pbar{margin:0}
+.whydo{background:var(--soft);border-radius:14px;padding:14px 16px}
+.whydo h4{margin:0 0 8px;font-family:var(--fm);font-size:10.5px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:var(--a1)}
+.whydo ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.whydo li{display:flex;gap:10px;font-size:14px;line-height:1.45}
+.whydo li::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--ink);margin-top:.6em;flex:none}
+.dcard .meta{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);align-items:center}
+.dcard .meta .mono{font-size:11.5px}
+.dcard details summary{cursor:pointer;color:var(--muted);font-size:12.5px;width:max-content;list-style:none}
+.dcard details summary::-webkit-details-marker{display:none}
+.dcard details summary::before{content:"+ ";font-family:var(--fm)}
+.dcard details[open] summary::before{content:"– "}
+.dcard .cost{margin:0}
+.dcard .btns{margin:2px 0 0}
+.dcard details summary{margin:0}
+.deck-nav{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.navbtn{width:42px;height:42px;border-radius:50%;border:1px solid var(--line);background:var(--surface);font-size:16px;box-shadow:var(--shadow)}
+.navbtn:disabled{opacity:.35;cursor:default}
+.dots{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.dots button{width:7px;height:7px;padding:0;border:0;border-radius:4px;background:var(--line);transition:width .3s,background .3s}
+.dots button.done{background:var(--ok)}
+.dots button.on{width:22px;background:var(--ink)}
+.sec-lab{font-family:var(--fm);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin:6px 4px -4px}
+.act details summary{cursor:pointer;color:var(--muted);font-size:12.5px;width:max-content;margin-top:8px;list-style:none}
+.act details summary::-webkit-details-marker{display:none}
+.act details summary::before{content:"+ ";font-family:var(--fm)}
+.act details[open] summary::before{content:"– "}
+.mult{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:4px 12px;margin:10px 0;font-size:12.5px}
+.mult span:nth-child(3n+1){color:var(--faint)}
+.mult span:nth-child(3n+2){font-family:var(--fm);font-size:11.5px}
+.draft{background:var(--soft);border-radius:12px;padding:12px 14px;margin:6px 0;white-space:pre-wrap;line-height:1.55}
+.btns{display:flex;gap:8px;margin-top:12px;align-items:center;flex-wrap:wrap}
+.do{border:0;border-radius:999px;padding:9px 18px;font-weight:500;font-size:13px;color:var(--bg);background:var(--ink);transition:transform .2s}
+.do:hover:not(:disabled){transform:translateY(-1px)}
+.do:disabled{background:var(--soft);color:var(--faint);cursor:not-allowed}
+.ghost{border:1px solid var(--line);background:transparent;border-radius:999px;padding:8px 15px;font-size:13px}
+.ghost:hover{border-color:var(--ink)}
+.confirm{border:1px solid var(--line);background:var(--bg);border-radius:16px;padding:14px 16px;margin-top:12px;animation:rise .35s ease}
+.confirm .who{font-size:13px;color:var(--muted);margin-bottom:8px}
+.confirm .who b{color:var(--ink);font-weight:500}
+.confirm label{font-size:12.5px;color:var(--muted);display:flex;gap:7px;align-items:center;margin-right:auto;cursor:pointer}
+.confirm label input{accent-color:var(--ink)}
+.status{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:500;border-radius:999px;padding:6px 13px}
+.status.running{background:var(--soft)}
+.status.done{color:var(--ok);background:color-mix(in srgb,var(--ok) 11%,transparent)}
+.status.waiting{color:var(--a1);background:color-mix(in srgb,var(--a1) 10%,transparent)}
+.status.waiting::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;animation:blink 1.4s infinite}
+@keyframes blink{50%{opacity:.25}}
+.status .spin{width:12px;height:12px}
+.live{padding:0;overflow:hidden;flex:none}
+.live-h{all:unset;box-sizing:border-box;width:100%;display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;font-size:13px}
+.live-h:focus-visible{outline:2px solid var(--a1);outline-offset:-2px}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex:none}
+.live.on .live-dot{background:var(--a1);animation:ping 1.4s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--a1) 55%,transparent)}70%,100%{box-shadow:0 0 0 7px transparent}}
+.live-now{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:500}
+.live-now b{font-weight:500;color:var(--a1)}
+.live-t{font-size:11.5px;color:var(--faint);font-variant-numeric:tabular-nums}
+.live-h svg{color:var(--faint);transition:transform .25s}
+.live-h[aria-expanded="false"] svg{transform:rotate(-90deg)}
+.live-b{padding:0 16px 14px;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px}
+.browser{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--bg)}
+.bbar{display:flex;align-items:center;gap:8px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--surface)}
+.lights{display:flex;gap:4px}.lights i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.url{flex:1;min-width:0;font-size:10.5px;color:var(--muted);background:var(--soft);border-radius:6px;padding:3px 8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bpage{position:relative;height:112px;padding:12px;overflow:hidden}
+.bpage::after{content:"";position:absolute;left:0;right:0;top:-30px;height:30px;background:linear-gradient(transparent,color-mix(in srgb,var(--a1) 16%,transparent),transparent)}
+.live.on .bpage::after{animation:scan 1.8s linear infinite}
+@keyframes scan{to{top:115px}}
+.site{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:8px;background:var(--ink);color:var(--bg);font-family:var(--fm);font-size:11px;font-weight:500}
+.sk{display:flex;flex-direction:column;gap:7px;margin-top:12px}
+.sk i{height:7px;border-radius:4px;background:var(--line)}
+.sk i:nth-child(1){width:88%}.sk i:nth-child(2){width:72%}.sk i:nth-child(3){width:94%}.sk i:nth-child(4){width:60%}.sk i:nth-child(5){width:82%}.sk i:nth-child(6){width:70%}
+.live.on .sk{animation:scrollpg 2.6s ease-in-out infinite}
+@keyframes scrollpg{50%{transform:translateY(-16px)}}
+.cursor{position:absolute;left:62%;top:58%;width:10px;height:10px;border-radius:50%;background:var(--a2);box-shadow:0 0 0 4px color-mix(in srgb,var(--a2) 25%,transparent);transition:left .7s cubic-bezier(.2,.8,.2,1),top .7s cubic-bezier(.2,.8,.2,1),opacity .3s}
+.live:not(.on) .cursor{opacity:0}
+.trail{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;height:140px;overflow:hidden;font-size:12px;-webkit-mask-image:linear-gradient(#000 65%,transparent);mask-image:linear-gradient(#000 65%,transparent)}
+.trail li{display:flex;flex-direction:column;gap:1px;color:var(--muted);animation:rise .35s ease}
+.trail li:first-child{color:var(--ink)}
+.trail .d{font-family:var(--fm);font-size:10px;color:var(--faint)}
+.trail:empty::before{content:"The agent's browser shows up here.";color:var(--faint)}
+@media (max-width:580px){.live-b{grid-template-columns:1fr}}
+.evlog{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));width:min(460px,calc(100vw - 32px));max-height:42vh;overflow:auto;margin:0;padding:14px 16px;font-family:var(--fm);font-size:11px;color:var(--muted);white-space:pre-wrap;word-break:break-word;z-index:30}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 18px;border-radius:999px;font-size:13px;z-index:40}
+
+@media (max-width:940px){
+  #run{grid-template-columns:minmax(0,1fr)}
+  .left{position:static;height:auto}
+  .feed{max-height:65vh}
+}
+@media (max-width:580px){
+  .accts{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .orb-wrap{width:240px;height:240px}
+  .total .big{font-size:64px}.total .cap{text-align:left}
+  .layers{grid-template-columns:1fr}
+  .act .side{grid-column:2;justify-content:flex-start}
+  .next{grid-template-columns:1fr}.next .pc{font-size:48px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+/* chances ring */
+.total{flex-direction:row;align-items:center;gap:22px;padding:18px 22px}
+.ring{position:relative;width:108px;height:108px;flex:none}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
+.ring circle{fill:none;stroke-width:7}
+.ring .rt{stroke:var(--soft)}
+.ring .rv{stroke:url(#rg);stroke-linecap:round;stroke-dasharray:276.5;stroke-dashoffset:276.5;transition:stroke-dashoffset .9s cubic-bezier(.2,.8,.2,1);filter:drop-shadow(0 0 6px color-mix(in srgb,var(--a1) 45%,transparent))}
+.total .ring .big{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:300;letter-spacing:-.04em;line-height:1}
+.total .ring .big sup{font-size:.45em;vertical-align:baseline;align-self:center;margin:-.9em 0 0 1px}
+.tot-r{display:flex;flex-direction:column;gap:12px;min-width:0}
+.total .tot-r .cap{font-size:24px;text-align:left;max-width:none}
+</style>
+</head>
+<body>
+
+
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+
+<header class="top">
+  <div class="brand"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.6 2.2"/><circle cx="9" cy="9" r="2.6" fill="currentColor"/></svg>Meetble</div>
+  <div class="top-r">
+    <span class="sample" id="modeTag">SAMPLE DATA</span>
+    <button class="tbtn" id="evBtn" type="button" aria-expanded="false">Events</button>
+    <button class="tbtn" id="resetBtn" type="button">Restart</button>
+  </div>
+</header>
+
+<main id="intro">
+  <div class="orb-wrap"><canvas id="bigOrb" aria-hidden="true"></canvas></div>
+  <div class="kicker" id="kicker">Anyone is meetable</div>
+  <h1 class="hello" id="hello">Who do you want to <b>meet</b>?</h1>
+
+  <div class="ask">
+    <div class="ask-bar">
+      <textarea id="askInput" rows="1" placeholder="Meet Boris Jabes before Friday, a 15-min call" aria-label="Who do you want to meet"></textarea>
+      <button class="send" id="askSend" type="button" aria-label="Send"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M9 14V4M4.5 8.5L9 4l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="hint"><button class="try" id="tryBtn" type="button">Try an example</button></div>
+  </div>
+
+  <div class="said card" id="said"><small>Your goal</small><span id="saidText"></span></div>
+
+  <section class="connect" aria-label="Link accounts">
+    <p class="sub">Each account unlocks a research track. The more you link, the deeper the agent digs.</p>
+    <div class="accts" id="accts"></div>
+    <div class="depth">
+      <span class="lbl">Research depth<span id="depthN"></span></span>
+      <div class="pips" id="pips"></div>
+      <span class="tracks" id="depthTracks"></span>
+    </div>
+    <div class="details" id="details">
+      <input id="dHint" placeholder="Who they are, to tell same-name people apart (e.g. YC partner)" aria-label="Hint">
+      <input id="dX" placeholder="X handle (optional)" aria-label="X handle">
+      <input id="dEvent" placeholder="Event URL you are both at (optional)" aria-label="Event URL">
+      <label class="reuse"><input type="checkbox" id="dReuse"> Reuse the last research run (faster retake)</label>
+      <div class="mode" id="modeNote"></div>
+    </div>
+    <button class="go" id="goBtn" type="button">Start research <span aria-hidden="true">→</span></button>
+  </section>
+</main>
+
+<section id="run">
+  <div class="left">
+    <div class="agent">
+      <canvas id="miniOrb" aria-hidden="true"></canvas>
+      <div><b>Meetble</b><span id="agentState">Researching…</span></div>
+    </div>
+    <div class="live card" id="live">
+      <button class="live-h" id="liveH" type="button" aria-expanded="true" aria-controls="liveB">
+        <span class="live-dot"></span><span class="live-now" id="liveNow">Waiting to start</span><span class="live-t mono" id="liveT">0:00</span>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M3.5 5.5L7 9l3.5-3.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="live-b" id="liveB">
+        <div class="browser" aria-hidden="true">
+          <div class="bbar"><span class="lights"><i></i><i></i><i></i></span><span class="url mono" id="liveUrl">about:blank</span></div>
+          <div class="bpage"><span class="site" id="liveSite">–</span><div class="sk"><i></i><i></i><i></i><i></i><i></i><i></i></div><span class="cursor" id="liveCursor"></span></div>
+        </div>
+        <ol class="trail" id="trail" aria-label="What the agent did"></ol>
+      </div>
+    </div>
+    <div class="feed" id="feed">
+      <div class="me" id="meBubble"></div>
+      <div class="list card" id="list"></div>
+    </div>
+    <div class="composer card">
+      <input id="composer" placeholder="Ask the agent anything…" aria-label="Message">
+      <button class="send" id="composerSend" type="button" aria-label="Send"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true"><path d="M9 14V4M4.5 8.5L9 4l4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+  </div>
+
+  <div class="right">
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tabResearch" aria-selected="true" type="button">Research</button>
+      <button class="tab" role="tab" id="tabPlan" aria-selected="false" type="button" disabled>Action plan<span class="cnt" id="planCnt"></span></button>
+    </div>
+
+    <div class="pane" id="paneResearch">
+      <div class="box card">
+        <h3>Profile <span id="cntPersona"></span></h3>
+        <div class="persona"><div class="avatar" id="avatar">BJ</div><div><div class="nm" id="tName">Boris Jabes</div><div class="rl" id="role">Identifying…</div></div></div>
+        <div class="facts" id="f-persona"></div>
+      </div>
+      <div class="box card"><h3>Right now <span id="cntNow"></span></h3><div class="facts" id="f-now"><div class="wait-txt">Waiting for research…</div></div></div>
+      <div class="box card"><h3>Precedents · how others reached him <span id="cntPrec"></span></h3><div class="facts" id="f-prec"><div class="wait-txt">Waiting for research…</div></div></div>
+    </div>
+
+    <div class="pane" id="panePlan" hidden>
+      <div class="total card">
+        <div class="ring">
+          <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--a1)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient></defs>
+            <circle class="rt" cx="50" cy="50" r="44"/><circle class="rv" id="ringV" cx="50" cy="50" r="44"/></svg>
+          <div class="big" id="big">–</div>
+        </div>
+        <div class="tot-r">
+          <div class="cap"><b>Chances</b> by <b id="byWhen">tonight</b></div><div class="sum" id="planSum"></div>
+          <div class="filters" id="filters" aria-label="Filter by how you meet"></div>
+        </div>
+      </div>
+      <div class="deck" id="deck"></div>
+      <div class="deck-nav"><button class="navbtn" id="prevBtn" type="button" aria-label="Previous route">←</button><div class="dots" id="dots"></div><button class="navbtn" id="nextBtn" type="button" aria-label="Next route">→</button></div>
+    </div>
+  </div>
+</section>
+
+<pre class="evlog card" id="evlog" hidden aria-label="Event stream"></pre>
+
+<script>
+const $ = s => document.querySelector(s);
+const RM = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const sleep = ms => new Promise(r => setTimeout(r, RM ? ms/4 : ms));
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const EXAMPLE = 'Meet Boris Jabes before 22:45 tonight, in person for 5 minutes. Budget ¥30,000.';
+
+/* ---------- the agent orb: port of Grace's Lock-in Orb (LOCKIN_ORB_VISUAL_HANDOFF.md) ---------- */
+const ORB_PALETTES = [ // Monet palettes from 《光與壑》, calm ones only; the orb drifts through them
+  ['#B0C4DE','#D8BFD8','#6495ED','#E6E6FA','#778899','#F8F8FF'], // spring night
+  ['#B0C4DE','#D8BFD8','#E6E6FA','#C0C0C0','#F0F8FF','#ADD8E6'], // summer sunset
+  ['#FFDAB9','#EE82EE','#FFB6C1','#F0E68C','#87CEFA','#FFF0F5'], // spring sunset
+  ['#FFFFFF','#F8F8FF','#E0FFFF','#D8BFD8','#B0E0E6','#E6E6FA'], // winter noon
+  ['#2F2F4F','#3C3C5C','#5D5D7D','#778899','#8E88A6','#B0C4DE'], // winter night
+  ['#F2D7EE','#FFFACD','#E0FFFF','#FFB7C5','#98FB98','#E6E6FA'], // spring morning
+];
+const TAU = Math.PI * 2, WHITE = [255,255,255], INK = [12,14,34];
+const noise3 = (() => {
+  const perm = Array.from({length:256}, (_, i) => i);
+  let seed = 20261022; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for(let i = 255; i > 0; i--){ const j = Math.floor(rnd() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+  const p = new Uint8Array(512); for(let i = 0; i < 512; i++) p[i] = perm[i & 255];
+  const fade = t => t*t*t*(t*(t*6 - 15) + 10), lerp = (a, b, t) => a + (b - a)*t;
+  const grad = (h, x, y, z) => { h &= 15; const u = h < 8 ? x : y, v = h < 4 ? y : h === 12 || h === 14 ? x : z; return ((h & 1) ? -u : u) + ((h & 2) ? -v : v); };
+  return (x, y, z) => {
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+    x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+    const u = fade(x), v = fade(y), w = fade(z);
+    const A = p[X] + Y, AA = p[A] + Z, AB = p[A + 1] + Z, B = p[X + 1] + Y, BA = p[B] + Z, BB = p[B + 1] + Z;
+    return lerp(lerp(lerp(grad(p[AA], x, y, z), grad(p[BA], x - 1, y, z), u), lerp(grad(p[AB], x, y - 1, z), grad(p[BB], x - 1, y - 1, z), u), v),
+                lerp(lerp(grad(p[AA + 1], x, y, z - 1), grad(p[BA + 1], x - 1, y, z - 1), u), lerp(grad(p[AB + 1], x, y - 1, z - 1), grad(p[BB + 1], x - 1, y - 1, z - 1), u), v), w);
+  };
+})();
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const smooth = (e0, e1, x) => { const q = clamp((x - e0)/(e1 - e0), 0, 1); return q*q*(3 - 2*q); };
+const hexc = h => [1,3,5].map(i => parseInt(h.slice(i, i + 2), 16));
+const rgba = (c, a) => `rgba(${c[0]|0},${c[1]|0},${c[2]|0},${clamp(a, 0, 1)})`;
+const mixc = (a, b, t) => a.map((v, i) => v + (b[i] - v)*t);
+function rgb2hsl([r, g, b]){
+  r /= 255; g /= 255; b /= 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn)/2, d = mx - mn;
+  if(d === 0) return [0, 0, l];
+  const s = l > .5 ? d/(2 - mx - mn) : d/(mx + mn);
+  const h = mx === r ? (g - b)/d + (g < b ? 6 : 0) : mx === g ? (b - r)/d + 2 : (r - g)/d + 4;
+  return [h/6, s, l];
+}
+function hsl2rgb([h, s, l]){
+  const f = (p, q, t) => { if(t < 0) t += 1; if(t > 1) t -= 1; if(t < 1/6) return p + (q - p)*6*t; if(t < 1/2) return q; if(t < 2/3) return p + (q - p)*(2/3 - t)*6; return p; };
+  if(s === 0) return [l*255, l*255, l*255];
+  const q = l < .5 ? l*(1 + s) : l + s - l*s, p = 2*l - q;
+  return [f(p, q, h + 1/3)*255, f(p, q, h)*255, f(p, q, h - 1/3)*255];
+}
+function harmonize(cols){ // pull hues toward the palette's main hue, keep saturation pastel
+  let x = 0, y = 0, ws = 0;
+  for(const c of cols){ const [h, s] = rgb2hsl(c), w = s > .05 ? Math.sqrt(s) : 0; x += Math.cos(h*TAU)*w; y += Math.sin(h*TAU)*w; ws += w; }
+  const h0 = ((Math.atan2(y, x)/TAU) + 1) % 1, neutral = ws < .15;
+  return cols.map(c => {
+    const [h, s, l] = rgb2hsl(c), k = clamp((s - .02)/.13, 0, 1);
+    let d = h - h0; d -= Math.round(d);
+    return hsl2rgb([neutral ? h : (h0 + clamp(d*.45, -.085, .085) + 1) % 1, Math.min(.52, s + (Math.max(s, .46) - s)*k), clamp(l, .36, .68)]);
+  });
+}
+const HARM = ORB_PALETTES.map(p => harmonize(p.map(hexc)));
+const layer = () => { const c = document.createElement('canvas'); return [c, c.getContext('2d')]; };
+
+class Orb{
+  constructor(canvas, {strands = 520, sparks = 150, rf = .3} = {}){
+    this.c = canvas; this.x = canvas.getContext('2d'); this.ns = strands; this.nk = sparks; this.rf = rf;
+    [this.body, this.bx] = layer(); [this.trail, this.tx] = layer(); [this.bloom, this.gx] = layer();
+    this.mode = 'idle'; this.energy = 0; this.t = 0; this.tw = 0; this.W = 0; this.H = 0;
+    this.cur = HARM[0].map(c => c.slice()); this.tgt = HARM[0];
+    this.last = performance.now(); this.frame = this.frame.bind(this); requestAnimationFrame(this.frame);
+  }
+  set(mode){ this.mode = mode; }
+  colors(){}
+  palette(i){ this.tgt = HARM[i % HARM.length]; }
+  resize(){
+    const W = this.c.clientWidth, H = this.c.clientHeight, D = this.D = Math.min(devicePixelRatio || 1, 2);
+    this.W = W; this.H = H;
+    for(const c of [this.c, this.body, this.trail]){ c.width = Math.round(W*D); c.height = Math.round(H*D); }
+    this.bloom.width = Math.max(1, Math.round(W*D/4)); this.bloom.height = Math.max(1, Math.round(H*D/4)); // quarter res + upscale = soft blur in every browser
+    this.R = Math.min(W, H)*this.rf; this.U = this.R/100;
+    this.ps = Array.from({length:this.ns}, () => this.spawnP({}, true));
+    this.ks = Array.from({length:this.nk}, () => this.spawnK({}, true));
+    for(let i = 0; i < 40; i++) this.stepP(1/60);
+  }
+  spawnP(p, first){
+    const r = Math.sqrt(Math.random())*.9*this.R, a = Math.random()*TAU, U = this.U;
+    Object.assign(p, {x:Math.cos(a)*r, y:Math.sin(a)*r, vx:0, vy:0, life:160 + Math.random()*240, w:(.3 + Math.random()**3*1.3)*U,
+      a:.06 + Math.random()*.1, sp:(.45 + Math.random()*.55)*U, ci:Math.random()*6|0, ph:Math.random()*TAU, fr:.5 + Math.random()*1.6});
+    p.age = first ? Math.random()*p.life : 0; return p;
+  }
+  spawnK(s, first){
+    const r = Math.sqrt(Math.random())*.85*this.R, a = Math.random()*TAU, U = this.U;
+    Object.assign(s, {x:Math.cos(a)*r, y:Math.sin(a)*r, life:2 + Math.random()*4, r:(.35 + Math.random()**2.5*1.3)*U,
+      sp:(8 + Math.random()*14)*U, fr:1.5 + Math.random()*3, ph:Math.random()*TAU, ci:Math.random()*6|0});
+    s.age = first ? Math.random()*s.life : 0; return s;
+  }
+  flow(x, y, z){
+    const s = .011, e = .35, nx = x/this.U*s, ny = y/this.U*s;
+    const dx = noise3(nx + e, ny, z) - noise3(nx - e, ny, z), dy = noise3(nx, ny + e, z) - noise3(nx, ny - e, z), m = Math.hypot(dx, dy) || 1;
+    return [dy/m, -dx/m];
+  }
+  stepP(dt){ // light strands into the persistent trail buffer
+    const x = this.tx, k = dt*60, R = this.R, z = .05*this.t, spin = .25 + .5*this.energy, D = this.D;
+    x.setTransform(1,0,0,1,0,0); x.globalCompositeOperation = 'destination-out';
+    x.fillStyle = `rgba(0,0,0,${1 - (1 - .025)**k})`; x.fillRect(0, 0, this.trail.width, this.trail.height);
+    x.setTransform(D,0,0,D,this.W*D/2,this.H*D/2); x.globalCompositeOperation = 'lighter'; x.lineCap = 'butt';
+    const relax = 1 - Math.exp(-2.6*dt), boost = 1 + 1.2*this.energy;
+    for(const p of this.ps){
+      const sp = p.sp*boost, [fx, fy] = this.flow(p.x, p.y, z), r = Math.hypot(p.x, p.y) || 1, ux = p.x/r, uy = p.y/r;
+      let tx = fx*sp - uy*spin*sp*(r/R), ty = fy*sp + ux*spin*sp*(r/R);
+      const over = (r - .8*R)/(.2*R); if(over > 0){ tx -= ux*over*sp*1.5; ty -= uy*over*sp*1.5; }
+      p.vx += (tx - p.vx)*relax; p.vy += (ty - p.vy)*relax;
+      const ox = p.x, oy = p.y; p.x += p.vx*k; p.y += p.vy*k; p.age += k;
+      if(p.age >= p.life || Math.hypot(p.x, p.y) > 1.15*R){ this.spawnP(p); continue; }
+      const life = p.age/p.life, al = p.a*Math.sin(Math.PI*life)**2*(1 - smooth(.45*R, .95*R, r))*(.35 + .65*(.5 + .5*Math.sin(this.t*p.fr + p.ph)))*(1 + .5*this.energy);
+      if(al < .003) continue;
+      x.strokeStyle = rgba(mixc(this.cur[p.ci], WHITE, .45), al); x.lineWidth = p.w;
+      x.beginPath(); x.moveTo(ox, oy); x.lineTo(p.x, p.y); x.stroke();
+    }
+  }
+  frame(now){
+    requestAnimationFrame(this.frame);
+    const dt = Math.min(.05, (now - this.last)/1000); this.last = now;
+    if(!this.c.offsetParent) return;
+    if(this.c.clientWidth !== this.W || this.c.clientHeight !== this.H) this.resize();
+    if(!this.W) return;
+    const eT = {idle:0, busy:.7, wait:0, done:.15}[this.mode] ?? 0;
+    this.energy += (eT - this.energy)*(1 - Math.exp(-3*dt));
+    this.t += dt; this.tw += (.13 + .6*this.energy)*dt;
+    const ease = 1 - Math.exp(-1.25*dt);
+    this.cur.forEach((c, i) => c.forEach((v, j) => c[j] = v + (this.tgt[i][j] - v)*ease));
+    let gr = 0, gg = 0, gb = 0, ws = 0;
+    for(const c of this.cur){ const w = (Math.max(...c) - Math.min(...c) + 25)**2; gr += c[0]*w; gg += c[1]*w; gb += c[2]*w; ws += w; }
+    const glow = [gr/ws, gg/ws, gb/ws], R = this.R, U = this.U, D = this.D, t = this.t, W = this.W, H = this.H, pal = this.cur;
+    this.stepP(dt);
+    // bloom
+    const g = this.gx; g.setTransform(1,0,0,1,0,0); g.clearRect(0, 0, this.bloom.width, this.bloom.height); g.drawImage(this.trail, 0, 0, this.bloom.width, this.bloom.height);
+    // body
+    const b = this.bx, sB = 1 + .022*Math.sin(1.2*t) + .012*this.energy*Math.sin(4.6*t);
+    b.setTransform(1,0,0,1,0,0); b.globalCompositeOperation = 'source-over'; b.clearRect(0, 0, this.body.width, this.body.height);
+    b.setTransform(D*sB,0,0,D*sB,W*D/2,H*D/2);
+    let gr2 = b.createRadialGradient(-.15*R, -.25*R, 0, 0, 0, R);
+    gr2.addColorStop(0, rgba(mixc(glow, WHITE, .35), .86)); gr2.addColorStop(.6, rgba(mixc(glow, INK, .24), .8)); gr2.addColorStop(1, rgba(mixc(glow, INK, .42), .74));
+    b.fillStyle = gr2; b.fillRect(-R, -R, 2*R, 2*R);
+    b.globalCompositeOperation = 'screen';
+    for(let i = 0; i < 6; i++){
+      const cx = noise3(i*3.7, .5, this.tw)*1.5*R, cy = noise3(i*3.7, 9.1, this.tw)*1.5*R, rr = R*(.7 + .3*noise3(i*3.7, 17.3, 1.3*this.tw));
+      const cg = b.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, rr));
+      cg.addColorStop(0, rgba(pal[i], .72)); cg.addColorStop(.4, rgba(pal[i], .4)); cg.addColorStop(.75, rgba(pal[i], .1)); cg.addColorStop(1, rgba(pal[i], 0));
+      b.fillStyle = cg; b.fillRect(-R, -R, 2*R, 2*R);
+    }
+    const sg = b.createRadialGradient(-.3*R, -.42*R, 0, -.3*R, -.42*R, .7*R);
+    sg.addColorStop(0, rgba(WHITE, .2)); sg.addColorStop(.45, rgba(WHITE, .09)); sg.addColorStop(1, rgba(WHITE, 0));
+    b.fillStyle = sg; b.fillRect(-R, -R, 2*R, 2*R);
+    b.globalCompositeOperation = 'lighter';
+    b.globalAlpha = .95; b.drawImage(this.bloom, -W/2, -H/2, W, H);
+    b.globalAlpha = .85; b.drawImage(this.trail, -W/2, -H/2, W, H);
+    b.globalAlpha = 1;
+    // sparkles
+    for(const s of this.ks){
+      const [fx, fy] = this.flow(s.x, s.y, .05*t + 7.3), r = Math.hypot(s.x, s.y) || 1;
+      s.x += (fx*s.sp - s.y/R*6*U - (r > .85*R ? s.x/r*20*U : 0))*dt; s.y += (fy*s.sp + s.x/R*6*U - (r > .85*R ? s.y/r*20*U : 0))*dt; s.age += dt;
+      if(s.age >= s.life || r > 1.1*R){ this.spawnK(s); continue; }
+      const al = Math.sin(Math.PI*s.age/s.life)**2*(.5 + .5*Math.sin(t*s.fr + s.ph))*(1 - smooth(.5*R, .95*R, r))*.55, col = mixc(pal[s.ci], WHITE, .78);
+      if(al < .01) continue;
+      b.fillStyle = rgba(col, al*.16); b.beginPath(); b.arc(s.x, s.y, s.r*3, 0, TAU); b.fill();
+      b.fillStyle = rgba(col, al); b.beginPath(); b.arc(s.x, s.y, s.r, 0, TAU); b.fill();
+    }
+    // soft-edge mask: no hard rim
+    b.globalCompositeOperation = 'destination-in';
+    const m = b.createRadialGradient(0, 0, 0, 0, 0, R);
+    [[0,1],[.5,1],[.66,.93],[.78,.74],[.87,.48],[.94,.22],[1,0]].forEach(([o, a]) => m.addColorStop(o, `rgba(0,0,0,${a})`));
+    b.fillStyle = m; b.fillRect(-W, -H, 2*W, 2*H);
+    b.globalCompositeOperation = 'source-over';
+    // main canvas: two halos, then the body
+    const x = this.x, ga = .28 + .18*this.energy, sBase = 1 + .022*Math.sin(1.2*t);
+    x.setTransform(1,0,0,1,0,0); x.clearRect(0, 0, this.c.width, this.c.height);
+    x.setTransform(D*sBase,0,0,D*sBase,W*D/2,H*D/2);
+    const halo = (cx, cy, rad, col, a) => {
+      const h = x.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      [[0,1],[.35,.8],[.55,.42],[.75,.14],[1,0]].forEach(([o, k]) => h.addColorStop(o, rgba(col, a*k)));
+      x.fillStyle = h; x.fillRect(cx - rad, cy - rad, 2*rad, 2*rad);
+    };
+    halo(0, 0, 1.62*R, glow, ga);
+    halo(Math.cos(.23*t)*.16*R, Math.sin(.31*t)*.16*R, 1.4*R, mixc(pal[2], pal[4], .5 + .5*Math.sin(.21*t)), .55*ga);
+    x.setTransform(1,0,0,1,0,0); x.drawImage(this.body, 0, 0);
+  }
+}
+const bigOrb = new Orb($('#bigOrb')), miniOrb = new Orb($('#miniOrb'), {strands:140, sparks:30, rf:.3});
+// drift through the palettes; faster while the agent works
+let orbPal = 0;
+(function cyclePalette(){
+  orbPal = (orbPal + 1) % ORB_PALETTES.length; bigOrb.palette(orbPal); miniOrb.palette(orbPal);
+  setTimeout(cyclePalette, miniOrb.mode === 'busy' ? 4000 : 9000);
+})();
+
+/* ---------- accounts → tracks ---------- */
+const ACCTS = [
+  {key:'linkedin', ic:'in', nm:'LinkedIn', on:true},
+  {key:'x', ic:'X', nm:'X', on:true},
+  {key:'email', ic:'@', nm:'Email', on:false},
+  {key:'luma', ic:'Lu', nm:'Luma', on:true},
+  {key:'calendar', ic:'Cal', nm:'Calendar', on:true, plan:true}, // your free time; not a research track
+];
+const NTRACKS = 6; // web + podcasts need only API keys, plus one per research account
+const isOn = k => ACCTS.find(a => a.key === k)?.on ?? true;
+const acctName = k => ACCTS.find(a => a.key === k)?.nm;
+function renderAccts(){
+  $('#accts').innerHTML = ACCTS.map(a => `
+    <button class="acct ${a.on?'on':''}" type="button" data-k="${a.key}" aria-pressed="${a.on}">
+      <span class="ic">${a.ic}</span><span class="nm">${a.nm}</span><span class="st">${a.on ? 'Connected' : a.plan ? 'Link for free time' : 'Link to unlock'}</span>
+    </button>`).join('');
+  const research = ACCTS.filter(a => a.on && !a.plan), n = 2 + research.length;
+  $('#pips').innerHTML = Array.from({length:NTRACKS}, (_, i) => `<i class="${i < n ? 'lit' : ''}"></i>`).join('');
+  $('#depthN').textContent = `${n}/${NTRACKS}`;
+  $('#depthTracks').textContent = ['Web','Podcasts', ...research.map(a => a.nm)].join(' · ') + (isOn('calendar') ? ' · plans fit your calendar' : '');
+}
+$('#accts').addEventListener('click', e => {
+  const b = e.target.closest('.acct'); if(!b) return;
+  const a = ACCTS.find(x => x.key === b.dataset.k); a.on = !a.on; renderAccts();
+});
+renderAccts();
+
+/* ---------- ask → link accounts ---------- */
+const ta = $('#askInput');
+ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
+ta.addEventListener('keydown', e => { if(e.key === 'Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); submitAsk(); } });
+$('#askSend').addEventListener('click', submitAsk);
+$('#tryBtn').addEventListener('click', () => { ta.value = EXAMPLE; ta.dispatchEvent(new Event('input')); ta.focus(); });
+function submitAsk(){
+  if(!ta.value.trim()) ta.value = EXAMPLE;
+  $('#saidText').textContent = ta.value.trim();
+  $('#kicker').textContent = 'Step 2 of 3';
+  $('#hello').innerHTML = 'Link your <b>accounts</b>';
+  document.body.className = 's-connect';
+  bigOrb.set('busy'); setTimeout(() => bigOrb.set('idle'), 900);
+}
+$('#goBtn').addEventListener('click', () => { document.body.className = 's-run'; scrollTo(0,0); LIVE ? runLive() : run(); });
+
+/* ---------- live mode: served by server.mjs, runs the real pipeline. Opened as a file (or ?demo=1) it plays the sample run. ---------- */
+let LIVE = false, es = null;
+(async () => {
+  if(!location.protocol.startsWith('http') || new URLSearchParams(location.search).has('demo')) { $('#modeNote').textContent = 'Preview mode: sample data, nothing is sent.'; return; }
+  try{
+    const h = await (await fetch('/api/health')).json(); LIVE = true; $('#modeTag').textContent = 'LIVE';
+    const miss = [!h.has_dist && 'dist/ (run npm run build)', !h.has_env && '.env', !h.has_profile && 'user_profile.json'].filter(Boolean);
+    $('#modeNote').textContent = 'Live mode: runs the real research on this computer.' + (miss.length ? ' Missing: ' + miss.join(', ') : '');
+    $('#dReuse').disabled = !h.has_research;
+  }catch{ $('#modeNote').textContent = 'Server not reachable: preview mode with sample data.'; }
+})();
+function onMeta(ev){
+  if(ev.name){ $('#tName').textContent = ev.name; $('#avatar').textContent = ev.name.split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase(); }
+  if(ev.role !== undefined) $('#role').textContent = ev.role || 'Identified';
+  if(ev.deadline_label) $('#byWhen').textContent = ev.deadline_label;
+}
+async function runLive(){
+  const my = ++runId;
+  $('#meBubble').textContent = $('#saidText').textContent;
+  setState('Researching…', 'busy'); liveStart();
+  const body = { ask: $('#saidText').textContent, hint: $('#dHint').value.trim(), x_handle: $('#dX').value.trim(),
+    event_urls: $('#dEvent').value.trim() ? [$('#dEvent').value.trim()] : [], reuse: $('#dReuse').checked };
+  let id;
+  try{ id = (await (await fetch('/api/run', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)})).json()).id; }
+  catch(e){ setState('Could not reach the local server', 'idle'); liveStop('Stopped'); return; }
+  es?.close(); es = new EventSource('/api/stream?id=' + id);
+  es.onmessage = m => {
+    if(my !== runId){ es.close(); return; }
+    const ev = JSON.parse(m.data);
+    if(ev.type === 'end'){ es.close(); liveStop(`Done · ${live.n} steps`);
+      setState(actions.length ? 'Done. Swipe through your routes.' : 'Stopped. See the checklist for why.', 'done'); return; }
+    if(ev.type === 'meta') return onMeta(ev);
+    if(ev.type === 'actions' && ev.summary) $('#planSum').textContent = ev.summary;
+    emit(ev);
+  };
+}
+
+/* ---------- event stream: the UI renders only these six types ---------- */
+const log = [];
+function emit(ev){
+  log.push(ev);
+  $('#evlog').textContent = log.slice(-60).map(e => JSON.stringify(e)).join('\n');
+  $('#evlog').scrollTop = 1e6;
+  ({step:onStep, finding:onFinding, actions:onActions, action_status:onStatus, browse:onBrowse})[ev.type]?.(ev);
+}
+$('#evBtn').addEventListener('click', e => { const hid = $('#evlog').hidden = !$('#evlog').hidden; e.target.setAttribute('aria-expanded', !hid); });
+
+const ICON = {
+  done:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7.5" fill="var(--ink)"/><path d="M4.9 8.2l2.1 2.1 4.2-4.5" stroke="var(--bg)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  none:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="none" stroke="var(--faint)" stroke-width="1.2"/><path d="M5.2 8h5.6" stroke="var(--faint)" stroke-width="1.4" stroke-linecap="round"/></svg>',
+  locked:'<svg viewBox="0 0 16 16" fill="none"><rect x="3.5" y="7" width="9" height="6.5" rx="1.8" stroke="var(--faint)" stroke-width="1.2"/><path d="M5.6 7V5.5a2.4 2.4 0 014.8 0V7" stroke="var(--faint)" stroke-width="1.2"/></svg>',
+  running:'<span class="spin"></span>',
+};
+const groups = {};
+function onStep(ev){
+  if(!groups[ev.group]){ const h = document.createElement('div'); h.className = 'grp'; h.textContent = ev.group; $('#list').append(h); groups[ev.group] = h; }
+  let el = document.getElementById('st-'+ev.id);
+  if(!el){
+    el = document.createElement('div'); el.id = 'st-'+ev.id;
+    let a = groups[ev.group];
+    while(a.nextElementSibling && !a.nextElementSibling.classList.contains('grp')) a = a.nextElementSibling;
+    a.after(el);
+  }
+  el._ev = ev;
+  const at = ev.at ?? 3, open = ev.layers && (ev.status === 'running' || el.dataset.open === '1');
+  el.className = 'ln ' + ev.status;
+  el.innerHTML = `<span class="ico">${ICON[ev.status]}</span>
+    <div class="t">${ev.layers ? `<button type="button" aria-expanded="${!!open}">${esc(ev.label)}</button>` : `<span>${esc(ev.label)}</span>`}${ev.via ? `<span class="via">via your ${esc(ev.via)}</span>` : ''}${ev.note ? ` <span class="note">(${esc(ev.note)})</span>` : ''}</div>
+    ${open ? `<div class="layers">${ev.layers.map((l,i) => `<div class="layer ${i < at ? 'on' : i === at && ev.status === 'running' ? 'cur' : ''}"><i></i><b>${esc(l[0])}</b><span>${i < at ? esc(l[1]) : '—'}</span></div>`).join('')}</div>` : ''}`;
+  $('#feed').scrollTop = 1e6;
+}
+$('#list').addEventListener('click', e => {
+  const ln = e.target.closest('.ln'); if(!ln || !e.target.closest('button')) return;
+  ln.dataset.open = ln.dataset.open === '1' ? '0' : '1'; onStep(ln._ev);
+});
+
+const counts = {persona:0, now:0, prec:0};
+function onFinding(ev){
+  const box = $('#f-'+ev.section);
+  if(!counts[ev.section]) box.innerHTML = '';
+  counts[ev.section]++;
+  $({persona:'#cntPersona', now:'#cntNow', prec:'#cntPrec'}[ev.section]).textContent = counts[ev.section];
+  const host = ev.source_url ? ev.source_url.replace(/^https?:\/\/(www\.)?/,'').split('/')[0] : '';
+  const d = document.createElement('div'); d.className = 'fact' + (ev.label ? ' kv' : '');
+  d.innerHTML = `${ev.label ? `<span class="k">${esc(ev.label)}</span>` : ''}<div>${esc(ev.claim)}</div>${host ? `<a class="src" href="${esc(ev.source_url)}" target="_blank" rel="noopener">${esc(host)} ↗</a>` : `<span class="src">${esc(ev.via)}</span>`}`;
+  const order = ['Role','Built','Talks about','Circle'], o = order.indexOf(ev.label); // tracks finish in any order
+  d.dataset.o = o < 0 ? 99 : o;
+  box.insertBefore(d, [...box.children].find(c => +c.dataset.o > +d.dataset.o) || null);
+}
+
+function showTab(plan){
+  $('#tabResearch').setAttribute('aria-selected', !plan); $('#tabPlan').setAttribute('aria-selected', plan);
+  $('#paneResearch').hidden = plan; $('#panePlan').hidden = !plan;
+}
+$('#tabResearch').addEventListener('click', () => showTab(false));
+$('#tabPlan').addEventListener('click', () => showTab(true));
+
+function sendComposer(){
+  const v = $('#composer').value.trim(); if(!v) return;
+  $('#composer').value = '';
+  toast('Follow-up chat isn\'t wired in this preview');
+}
+$('#composer').addEventListener('keydown', e => { if(e.key === 'Enter' && !e.isComposing) sendComposer(); });
+$('#composerSend').addEventListener('click', sendComposer);
+
+/* ---------- scoring: the model gives a base rate + four multipliers; code computes % ---------- */
+const pOf = a => Math.min(.90, Math.max(.01, a.base * a.rel * a.time * a.warm * a.chan));
+const total = list => 1 - list.reduce((p, a) => p * (1 - pOf(a)), 1);
+console.assert(Math.abs(pOf({base:.2,rel:1,time:1.5,warm:1,chan:1}) - .3) < 1e-9, 'pOf');
+console.assert(Math.abs(total([{base:.3,rel:1,time:1,warm:1,chan:1},{base:.1,rel:1,time:1,warm:1,chan:1}]) - .37) < 1e-9, 'total');
+console.assert(pOf({base:.001,rel:1,time:1,warm:1,chan:1}) === .01 && pOf({base:2,rel:1,time:1,warm:1,chan:1}) === .9, 'clip');
+
+const OUT = {call:'15-min call', reply:'Reply', face:'In-person hello'};
+let pTotal = null, actions = [], filter = 'all', confirmFirst = true, openConfirm = null, cur = 0, dir = '';
+const status = {};
+const num = p => p < .1 ? (p*100).toFixed(1) : String(Math.round(p*100));
+const vis = () => actions.filter(a => filter === 'all' || a.out === filter);
+
+function onActions(ev){
+  pTotal = typeof ev.p_total === 'number' ? ev.p_total : null;
+  actions = ev.actions.slice().sort((a,b) => pOf(b) - pOf(a));
+  cur = 0; dir = 'r';
+  $('#tabPlan').disabled = false; $('#planCnt').textContent = actions.length;
+  renderFilters(); renderActs(); showTab(true);
+}
+function renderFilters(){
+  $('#filters').innerHTML = [['all','All'], ...Object.entries(OUT)].map(([k,v]) =>
+    `<button class="chip" type="button" data-f="${k}" aria-pressed="${filter===k}">${v}</button>`).join('');
+}
+$('#filters').addEventListener('click', e => { const b = e.target.closest('[data-f]'); if(!b) return; filter = b.dataset.f; cur = 0; dir = 'r'; openConfirm = null; renderFilters(); renderActs(); });
+
+// One button per card. Agent cards run through your accounts; "you" cards go on your calendar.
+function control(a){
+  const st = status[a.id], locked = a.acct && !isOn(a.acct);
+  if(st) return statusPill(st);
+  return `<button class="do big" type="button" data-do="${a.id}" ${a.late||locked?'disabled':''}>${locked ? 'Link ' + acctName(a.acct) + ' first' : a.late ? esc(a.lateText || 'Too slow for the deadline') : esc(a.cta)}</button>`;
+}
+function confirmBox(a){
+  if(openConfirm !== a.id) return '';
+  return `<div class="confirm">
+    <div class="who">${a.acct ? `Uses your <b>${acctName(a.acct)}</b>` : 'Uses none of your accounts'} · ${esc(a.doWhat)}</div>
+    ${a.draft ? `<div class="draft">${esc(a.draft)}</div>` : ''}
+    <div class="btns"><label><input type="checkbox" id="skipConfirm"> Don't ask again</label>
+      <button class="ghost" type="button" data-cancel="1">Cancel</button><button class="do" type="button" data-ok="${a.id}">Confirm</button></div>
+  </div>`;
+}
+const kindTag = a => `<span class="kind ${a.kind}">${a.kind === 'agent' ? 'Agent does it' : 'You go'}</span>`;
+
+function renderActs(){
+  const list = vis();
+  if(cur >= list.length) cur = Math.max(0, list.length - 1);
+  const a = list[cur], left = list.length - cur;
+  $('#deck').className = 'deck' + (left <= 1 ? ' one' : left === 2 ? ' two' : '');
+  $('#deck').innerHTML = a ? `
+    <article class="dcard card ${dir ? 'in-' + dir : ''} ${a.late ? 'late' : ''}" aria-live="polite">
+      <div class="top"><span class="rank">Route ${cur + 1} of ${list.length}</span><div class="meta">${kindTag(a)}<span class="out ${a.out}">${OUT[a.out]}</span></div></div>
+      <div class="pc">${num(pOf(a))}<sup>%</sup><span>chance this works</span></div>
+      <h2>${esc(a.title)}</h2>
+      <div class="pbar"><div class="trk"><i style="width:${pOf(a)*100}%"></i></div></div>
+      <div class="whydo"><h4>Why you should do it</h4><ul>${a.whyDo.map(w => `<li>${esc(w)}</li>`).join('')}</ul></div>
+      <div class="btns">${control(a)}</div>
+      ${confirmBox(a)}
+    </article>` : '<div class="wait-txt">No route for this way of meeting yet.</div>';
+  dir = '';
+  $('#dots').innerHTML = list.map((x,i) => `<button type="button" class="${i === cur ? 'on' : ''} ${status[x.id] ? 'done' : ''}" data-go="${i}" aria-label="Route ${i+1}"></button>`).join('');
+  $('#prevBtn').disabled = cur <= 0; $('#nextBtn').disabled = cur >= list.length - 1;
+  const doable = list.filter(x => !x.late), t = filter === 'all' && pTotal !== null ? pTotal : doable.length ? total(doable) : 0; // live: the Python total (deadline + budget)
+  $('#big').innerHTML = doable.length ? `${num(t)}<sup>%</sup>` : '–';
+  $('#ringV').style.strokeDashoffset = 276.5 * (1 - t);
+}
+function go(i){
+  const n = vis().length; if(i < 0 || i >= n || i === cur) return;
+  dir = i > cur ? 'r' : 'l'; cur = i; openConfirm = null; renderActs();
+}
+$('#prevBtn').addEventListener('click', () => go(cur - 1));
+$('#nextBtn').addEventListener('click', () => go(cur + 1));
+$('#dots').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if(b) go(+b.dataset.go); });
+document.addEventListener('keydown', e => {
+  if($('#panePlan').hidden || /INPUT|TEXTAREA/.test(document.activeElement?.tagName)) return;
+  if(e.key === 'ArrowRight') go(cur + 1); if(e.key === 'ArrowLeft') go(cur - 1);
+});
+let sx = null; // swipe the deck
+$('#deck').addEventListener('pointerdown', e => { sx = e.clientX; });
+$('#deck').addEventListener('pointerup', e => { if(sx === null) return; const dx = e.clientX - sx; sx = null; if(Math.abs(dx) > 60) go(cur + (dx < 0 ? 1 : -1)); });
+
+function statusPill(st){
+  if(st.s === 'running') return `<span class="status running"><span class="spin"></span>Running</span>`;
+  if(st.s === 'waiting') return `<span class="status waiting">Awaiting reply · sent ${st.t}</span>`;
+  return `<span class="status done">✓ Done${st.note ? ' · ' + esc(st.note) : ''}</span>`;
+}
+$('#panePlan').addEventListener('click', async e => {
+  const d = e.target.dataset;
+  if(d.copy){
+    const a = actions.find(x => x.id === d.copy);
+    try{ await navigator.clipboard.writeText(a.draft); toast('Draft copied'); }catch{ toast('Copy is blocked here. Select the draft text instead.'); }
+  }
+  if(d.do){ if(confirmFirst){ openConfirm = d.do; renderActs(); } else execute(d.do); }
+  if(d.cancel){ openConfirm = null; renderActs(); }
+  if(d.ok){ if($('#skipConfirm')?.checked) confirmFirst = false; openConfirm = null; execute(d.ok); }
+});
+
+function onStatus(ev){ status[ev.id] = ev; renderActs(); }
+async function executeLive(a){
+  const t = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+  let copied = false;
+  if(a.draft){ try{ await navigator.clipboard.writeText(a.draft); copied = true; }catch{} }
+  if(a.url) window.open(a.url, '_blank', 'noopener');
+  const note = [copied ? 'draft copied' : a.draft ? 'copy the draft from the card' : '', a.url ? 'link opened' : ''].filter(Boolean).join(', ') || 'added to your plan';
+  emit({type:'step', id:'x-'+a.id, group:'Step 6 · Execution', label:a.title, status:'done', note: note + (a.draft ? '; you press send' : '')});
+  emit({type:'action_status', id:a.id, s: a.draft || a.url ? 'waiting' : 'done', t, note: a.doneNote || ''});
+  toast(copied ? 'Draft copied. Paste it and send it yourself.' : note);
+}
+async function execute(id){
+  const a = actions.find(x => x.id === id), via = a.acct ? acctName(a.acct) : null;
+  if(LIVE) return executeLive(a);
+  setState('Working on it…', 'busy');
+  emit({type:'step', id:'x-'+id, group:'Step 6 · Execution', label:a.doWhat, status:'running', via});
+  emit({type:'action_status', id, s:'running'});
+  liveStart(); const site = ACCT_SITE[a.acct] || 'meetble';
+  browse(site, 'Opening ' + site + (a.acct ? ' as you' : ''), site);
+  await sleep(700);
+  browse(site, a.doWhat, site);
+  await sleep(800);
+  liveStop('Done · ' + a.doWhat);
+  const t = new Date().toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
+  emit({type:'step', id:'x-'+id, group:'Step 6 · Execution', label:a.doWhat, status:'done', note:'preview: nothing was sent', via});
+  emit({type:'action_status', id, s: a.doneNote ? 'done' : 'waiting', t, note: a.doneNote || ''});
+  setState('Done. Take the next move or wait for replies.', 'done');
+}
+
+/* ---------- live agent view: what the agent has open right now ---------- */
+const live = {t0:0, timer:null, n:0};
+const browse = (domain, action, url) => emit({type:'browse', domain, action, url: url || domain});
+function onBrowse(ev){
+  $('#live').classList.add('on');
+  $('#liveNow').innerHTML = `${esc(ev.action)} <b>· ${esc(ev.domain)}</b>`;
+  $('#liveUrl').textContent = ev.url; $('#liveSite').textContent = ev.domain;
+  $('#liveCursor').style.left = (20 + Math.random()*65) + '%'; $('#liveCursor').style.top = (35 + Math.random()*50) + '%';
+  const li = document.createElement('li'); li.innerHTML = `<span class="d">${esc(ev.domain)}</span><span>${esc(ev.action)}</span>`;
+  $('#trail').prepend(li); while($('#trail').children.length > 10) $('#trail').lastChild.remove();
+  live.n++;
+}
+function tick(){ const s = Math.round((Date.now() - live.t0)/1000); $('#liveT').textContent = `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
+function liveStart(){ live.t0 = Date.now(); clearInterval(live.timer); live.timer = setInterval(tick, 1000); tick(); $('#live').classList.add('on'); }
+function liveStop(text){ clearInterval(live.timer); $('#live').classList.remove('on'); $('#liveNow').textContent = text; }
+$('#liveH').addEventListener('click', e => { const open = $('#liveB').hidden; $('#liveB').hidden = !open; e.currentTarget.setAttribute('aria-expanded', open); });
+$('#resetBtn').addEventListener('click', () => {
+  clearInterval(live.timer); live.n = 0; $('#trail').innerHTML = ''; $('#live').classList.remove('on');
+  $('#liveNow').textContent = 'Waiting to start'; $('#liveT').textContent = '0:00'; $('#liveUrl').textContent = 'about:blank'; $('#liveSite').textContent = '–';
+});
+const ACCT_SITE = {linkedin:'linkedin.com', x:'x.com', luma:'lu.ma', calendar:'calendar.google.com', email:'mail.google.com'};
+
+function setState(t, mode){ $('#agentState').textContent = t; miniOrb.set(mode); }
+let tt;
+function toast(t){ let el = $('.toast'); if(!el){ el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role','status'); document.body.append(el); }
+  el.textContent = t; el.hidden = false; clearTimeout(tt); tt = setTimeout(() => el.hidden = true, 2200); }
+
+/* ---------- sample run (stands in for the backend) ---------- */
+const G0 = 'Step 0 · Who', G1 = 'Step 1 · What he wants', G2 = 'Step 2 · Right now', G3 = 'Step 3 · Needs', G5 = 'Step 5 · Plan';
+const LAYERS = (a,b,c) => [['Broad search',a],['Filter sources',b],['Deep read',c]];
+
+const BROWSE = {
+  web:[['exa.ai','Searching the web for "Boris Jabes"','exa.ai/search?q=Boris+Jabes'],['techtarget.com','Filtering 38 results down to 9 sources','techtarget.com/news/…'],['crunchbase.com','Reading the full page','crunchbase.com/person/…']],
+  podcast:[['youtube.com','Searching podcasts and talks','youtube.com/results?search_query=Boris+Jabes'],['youtube.com','Keeping 4 episodes with transcripts','youtube.com/watch?v=…'],['youtube.com','Reading the transcript, his words only','youtube.com/watch?v=… · transcript']],
+  linkedin:[['linkedin.com','Opening his profile, signed in as you','linkedin.com/in/…'],['linkedin.com','Scrolling his recent posts','linkedin.com/in/…/recent-activity'],['linkedin.com','Checking mutual connections','linkedin.com/search/results/people/…']],
+  x:[['x.com','Browsing his posts','x.com/search?q=Boris%20Jabes'],['x.com','Scrolling his replies','x.com/…/with_replies'],['x.com','Mapping who he replies to most','x.com/…/with_replies']],
+};
+async function track(key, label, layers, finds, note, via){
+  if(key !== 'web' && key !== 'podcast' && !isOn(key)){
+    emit({type:'step', id:'t-'+key, group:G1, label, status:'locked', note:'not linked, skipped'}); return;
+  }
+  emit({type:'track_started', track:key});
+  for(let i = 0; i <= layers.length; i++){
+    emit({type:'step', id:'t-'+key, group:G1, label, status:'running', layers, at:i, via});
+    if(BROWSE[key]?.[i]) browse(...BROWSE[key][i]);
+    await sleep(600 + Math.random()*700);
+  }
+  for(const f of finds){ emit({type:'finding', ...f}); await sleep(260); }
+  emit({type:'step', id:'t-'+key, group:G1, label, status:finds.length ? 'done' : 'none', note, layers, via});
+  emit({type:'track_done', track:key});
+}
+
+let runId = 0;
+async function run(){
+  const my = ++runId, alive = () => my === runId;
+  $('#meBubble').textContent = $('#saidText').textContent;
+  setState('Researching…', 'busy'); liveStart();
+  browse('exa.ai', 'Looking up people named Boris Jabes', 'exa.ai/search?category=people&q=Boris+Jabes');
+
+  emit({type:'step', id:'s0', group:G0, label:'Identifying which Boris Jabes', status:'running'});
+  await sleep(900); if(!alive()) return;
+  emit({type:'step', id:'s0', group:G0, label:'Identified the target', status:'done', note:'YC Visiting Partner; 2 same-name people ruled out'});
+  $('#role').textContent = 'YC Visiting Partner · co-founder of Census';
+  emit({type:'step', id:'s0b', group:G0, label:'Read your profile', status:'done', note:'3 things you can offer'});
+  if(isOn('calendar')) emit({type:'step', id:'s0c', group:G0, label:'Read your free time', status:'done', note:'free 21:00–23:30 tonight (sample)', via:'Calendar'});
+
+  await Promise.all([
+    track('web', 'Searched the web', LAYERS('38 results','9 kept','6 pages'), [
+      {section:'persona', label:'Role', claim:'Visiting Partner at Y Combinator', source_url:'https://www.crunchbase.com/'},
+      {section:'persona', label:'Built', claim:'Co-founded Census, acquired by Fivetran (May 2025)', source_url:'https://www.techtarget.com/'},
+      {section:'now', claim:'Has a speaker page at Coalesce, the dbt Labs conference', source_url:'https://coalesce.getdbt.com/'},
+    ], '6 pages read, 3 findings'),
+    track('podcast', 'Searched podcasts and talks', LAYERS('12 episodes','4 transcripts','his words only'), [
+      {section:'persona', label:'Talks about', claim:'Data activation and the modern data stack (sample)', source_url:'https://www.youtube.com/results?search_query=Boris+Jabes'},
+    ], '4 episodes, quotes pending'),
+    track('linkedin', 'Read LinkedIn', LAYERS('profile','posts, comments','mutuals'), [
+      {section:'prec', claim:'You share 2 connections; one used to work at Census (sample)', source_url:'https://www.linkedin.com/'},
+    ], '2 mutual connections', 'LinkedIn'),
+    track('x', 'Read X posts and replies', LAYERS('recent posts','replies only','top 5 accounts'), [
+      {section:'persona', label:'Circle', claim:'Founders and data-tool builders (sample)', source_url:'https://x.com/'},
+    ], 'inner circle: 5 accounts'),
+    track('email', 'Work email', [], [], ''),
+  ]);
+  if(!alive()) return;
+
+  emit({type:'step', id:'m7', group:G2, label:'Checking mentions, last 7 days', status:'running'});
+  browse('news.google.com', 'Searching news from the last 7 days', 'news.google.com/search?q=Boris+Jabes+when:7d');
+  await sleep(900); if(!alive()) return;
+  emit({type:'step', id:'m7', group:G2, label:'Checked mentions', status:'none', note:'none in 7 days; widened to 30, still none'});
+  emit({type:'step', id:'rp', group:G2, label:'Reading his latest posts', status:'running', via:'X'});
+  browse('x.com', 'Reading his latest posts', 'x.com/…');
+  await sleep(800); if(!alive()) return;
+  emit({type:'finding', section:'now', claim:'Latest X post is about data tooling for AI teams (sample)', source_url:'https://x.com/'});
+  emit({type:'finding', section:'now', claim:'Latest news coverage: the Fivetran–Census acquisition (May 2025); nothing newer', source_url:'https://www.techtarget.com/'});
+  emit({type:'step', id:'rp', group:G2, label:'Read his latest posts and news', status:'done', note:'1 recent post, no new coverage', via:'X'});
+  emit({type:'step', id:'bk', group:G2, label:'Probing booking pages', status:'running'});
+  browse('calendly.com', 'Trying calendly.com/boris-jabes', 'calendly.com/boris-jabes');
+  await sleep(800); if(!alive()) return;
+  emit({type:'step', id:'bk', group:G2, label:'Probed booking pages', status:'none', note:'no calendly.com or cal.com page'});
+  emit({type:'step', id:'ev', group:G2, label:'Finding events before the deadline', status:'running'});
+  browse('lu.ma', 'Searching events before the deadline', 'lu.ma/discover');
+  await sleep(900); if(!alive()) return;
+  emit({type:'finding', section:'now', claim:'Tonight: first prize at this hackathon is office hours with him. Judging starts 22:45', source_url:'https://lu.ma/'});
+  emit({type:'step', id:'ev', group:G2, label:'Found events', status:'done', note:'1 tonight: this hackathon'});
+  if(isOn('luma')){
+    emit({type:'step', id:'lu', group:G2, label:'Signing in to Luma to read the guest list', status:'running', via:'Luma'});
+    browse('lu.ma', 'Signing in with your Luma account', 'lu.ma/signin');
+    await sleep(550); if(!alive()) return;
+    browse('lu.ma', 'Reading the guest list', 'lu.ma/…/guests');
+    await sleep(550); if(!alive()) return;
+    emit({type:'step', id:'lu', group:G2, label:'Read the Luma guest list', status:'done', note:'you\'re registered; he\'s listed as a judge (sample)', via:'Luma'});
+  } else emit({type:'step', id:'lu', group:G2, label:'Luma guest list', status:'locked', note:'Luma not linked'});
+  emit({type:'finding', section:'prec', claim:'Hackathon winners get office hours with the judging partner: a public route in', source_url:'https://lu.ma/'});
+  emit({type:'finding', section:'prec', claim:'Founders describe meeting him within a week through an intro from a portfolio founder (sample)', source_url:'https://www.ycombinator.com/blog'});
+
+  emit({type:'step', id:'nd', group:G3, label:'Guessing what he wants', status:'running'});
+  browse('reasoning', 'Matching his needs to what you can offer', 'meetble://reasoning');
+  await sleep(900); if(!alive()) return;
+  emit({type:'step', id:'nd', group:G3, label:'Guessed what he wants', status:'done', note:'3 needs, each with a counter-signal'});
+
+  // No interview: research goes straight to the action deck.
+  const a1 = {rel:1.2}, a2 = {warm:1.4}, a3 = {chan:1};
+
+  emit({type:'step', id:'ac', group:G5, label:'Ranking actions', status:'running'});
+  browse('reasoning', 'Scoring every route against tonight\'s deadline', 'meetble://ranking');
+  await sleep(900); if(!alive()) return;
+  emit({type:'actions', actions:buildActions(a1, a2, a3)});
+  emit({type:'step', id:'ac', group:G5, label:'Ranked actions', status:'done', note:`${actions.length} actions, ${actions.filter(a=>a.late).length} too slow for tonight`});
+  setState('Done. Swipe through your routes.', 'done');
+  liveStop(`Done · ${live.n} steps`);
+}
+
+// Plain-language reasons shown on each card
+const WHY_DO = {
+  event:['He\'s judging this hackathon tonight, so he\'s here to meet teams','Your demo ties straight to what he built at Census','No intro or cold message needed'],
+  referral:['A warm intro is the strongest route to a YC partner','You share 2 connections, one of them ex-Census','They can message him tonight, before judging'],
+  register:['He\'s on the after-party guest list','Conversations are easier after judging is over','The agent registers you with your Luma account'],
+  network:['The organizers and other judges know him well','They\'re all in this room tonight','They can walk you over at the right moment'],
+  xreply:['He replies to builders on X','A sharp reply puts your name in front of him tonight','Costs you 15 minutes'],
+  linkedin:['You share 2 connections, so you won\'t look like a stranger','The note points at his work, not your ask','Sets up a follow-up after tonight'],
+  email:['A value-first email stands out in a partner\'s inbox','Good as a follow-up after you meet','Replies usually take days, so it misses tonight'],
+  coffee:['A small gift tied to his work gets noticed','His office address is public','Arrives after the deadline, so it\'s a later move'],
+};
+
+function buildActions(a1, a2, a3){
+  const A = o => ({rel:1, time:1, warm:1, chan:1, late:false, days:0, cost:0, acct:null, draft:'', doneNote:'', ...o});
+  const rel = a1.rel ?? 1, warm = a2.warm ?? 1, chan = a3.chan ?? 1;
+  return [
+    A({id:'event', kind:'you', out:'face', title:'Be at judging at 22:45 with a 60-second demo', cta:'Add 22:45 to my calendar', base:.20, rel, time:1.5, chan, hours:1, acct:'calendar',
+       doWhat:'Adds judging at 22:45 to your calendar with an opening line', doneNote:'on your calendar, 22:45',
+       why:['In person at an event he attends: 10–25%','Tied to what he built','The event is tonight','No mutual contact needed', chan<1?'You won\'t be there':'He\'s there to meet teams'],
+       draft:'Opening: "You built Census to get data where it\'s used. We built an agent that finds the best route to reach a person. Can I show you the 60-second version?"'}),
+    A({id:'referral', kind:'agent', out:'call', title:'Get a mutual connection to intro you tonight', cta:'Send intro request', base:.35, warm, chan: warm>1 ? 1 : .3, hours:.5, acct:'linkedin',
+       doWhat:'Sends the intro request to your mutual connection',
+       why:['Referrals: 30–50%','Neutral','Same-day ask', warm>1?'You know someone close to him':'No one to ask', warm>1?'Reachable tonight':'No one to ask'],
+       draft:'Hi! I\'m at the hackathon where Boris Jabes is judging tonight. Would you send him a one-line intro?\nForwardable: "[Your name] built Meetble tonight, an agent that finds the best route to reach anyone. Worth 5 minutes."'}),
+    A({id:'register', kind:'agent', out:'face', title:'Register for the after-party he\'s listed at', cta:'Register me on Luma', base:.10, time:1.3, chan, hours:1, acct:'luma',
+       doWhat:'Registers you for the after-party with your Luma account', doneNote:'registered',
+       why:['Same room as him: 10–25%, after-party is looser','Neutral','Tonight, right after judging','Organizers know him','He\'s on the guest list (sample)']}),
+    A({id:'network', kind:'you', out:'face', title:'Meet the other judges and organizers first', cta:'Plan who to meet', base:.08, time:1.3, chan, hours:1, acct:'calendar',
+       doWhat:'Adds a 21:30 slot to meet organizers, with names', doneNote:'on your calendar, 21:30',
+       why:['Network first: 5–15%','Neutral','Everyone is in one room tonight','Organizers know him','In person']}),
+    A({id:'xreply', kind:'agent', out:'reply', title:'Reply to his latest post on X', cta:'Post the reply', base:.03, rel, time:1.3, hours:.3, acct:'x',
+       doWhat:'Posts the reply from your X account',
+       why:['Cold reply or DM: 1–5%','On his topic','Recent post','Cold','He replies on X'],
+       draft:'Add one concrete point to his latest post, then: "Building on exactly this at tonight\'s hackathon."'}),
+    A({id:'linkedin', kind:'agent', out:'reply', title:'LinkedIn connection request with a note', cta:'Send the request', base:.04, rel, warm: warm>1 ? 1.3 : 1, hours:.2, days:1, acct:'linkedin',
+       doWhat:'Sends the request from your LinkedIn account',
+       why:['Cold DM: 1–5%','Note cites his work','Neutral', warm>1?'Mutual connections show':'Cold','Accepts can take a day'],
+       draft:'Hi Boris, I\'m at tonight\'s hackathon. I built an agent that turns research on a person into ranked ways to reach them. Would love your take on the data side.'}),
+    A({id:'email', kind:'agent', out:'reply', title:'Send a value-first cold email', cta:'Send the email', base:.06, rel, hours:.5, days:3, late:true, acct:'email',
+       doWhat:'Sends from your email',
+       why:['Value-first cold email: 3–10%','On his topic','Replies usually take days','Cold','Work-address guess: medium confidence'],
+       draft:'Subject: An agent built on the Census idea, for people\n\nHi Boris, …'}),
+    A({id:'coffee', kind:'agent', out:'reply', title:'Send coffee to his team with a note', cta:'Order coffee', cost:4000, base:.08, rel, hours:.5, days:3, late:true,
+       doWhat:'Places the order with a note',
+       why:['Office delivery: 5–15%','Note tied to his work','Arrives after the deadline','Cold','Office address is public']}),
+  ].map(a => ({...a, whyDo: WHY_DO[a.id]}));
+}
+
+/* ---------- restart ---------- */
+$('#resetBtn').addEventListener('click', () => {
+  runId++; es?.close(); if(LIVE) fetch('/api/stop', {method:'POST'}).catch(() => {}); $('#planSum').textContent = '';
+  log.length = 0; actions = []; filter = 'all'; openConfirm = null; cur = 0;
+  Object.keys(status).forEach(k => delete status[k]); Object.keys(groups).forEach(k => delete groups[k]);
+  counts.persona = counts.now = counts.prec = 0;
+  $('#list').innerHTML = ''; $('#evlog').textContent = '';
+  document.querySelectorAll('#feed .q, #feed .reply, #feed .me:not(#meBubble)').forEach(n => n.remove());
+  $('#f-persona').innerHTML = ''; $('#f-now').innerHTML = $('#f-prec').innerHTML = '<div class="wait-txt">Waiting for research…</div>';
+  ['#cntPersona','#cntNow','#cntPrec','#planCnt'].forEach(s => $(s).textContent = '');
+  $('#role').textContent = 'Identifying…'; $('#tabPlan').disabled = true; showTab(false);
+  $('#kicker').textContent = 'Anyone is meetable'; $('#hello').innerHTML = 'Who do you want to <b>meet</b>?';
+  ta.value = ''; ta.style.height = ''; $('#composer').placeholder = 'Ask the agent anything…';
+  document.body.className = ''; bigOrb.set('idle'); scrollTo(0,0);
+});
+</script>
+
+</body>
+</html>

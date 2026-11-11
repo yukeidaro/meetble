@@ -81,6 +81,14 @@ python -m plan out\research.json --profile user_profile.json
 
 The first command does the research (Steps 0–2) and writes `out/research.json`. The second one guesses what he wants, asks you questions, and ranks the actions (Steps 3–5). You need Node 18+ and Python 3.10+. For the video, `--answers "a|b|c"` scripts the Step 4 answers. The plan comes out as `out\plan.md`. There's nothing to `npm install` or `pip install`.
 
+### Run it as an app (UI + real pipeline)
+
+```powershell
+node server.mjs
+```
+
+Then open http://localhost:8787. Type who and by when ("Meet Boris Jabes before 22:45 tonight, in person. Budget ¥30,000."), add a hint or X handle if you have one, and press Start research. The server runs both commands above on this computer and streams every checklist line into the UI, then shows the ranked actions as cards. "Copy draft & open" copies the draft and opens the link; you press send yourself. Tick "Reuse the last research run" to skip Steps 0–2 on a retake. If `dist\cli.js` is missing, run `npm install` and then `npm run build` once. Opening `ui/index.html` straight from disk (or adding `?demo=1`) plays the sample run instead.
+
 For Luma and LinkedIn, also install browser-use (`pip install "browser-use[anthropic]"`), turn on remote debugging in Chrome at `chrome://inspect/#remote-debugging`, and stay logged in:
 
 ```powershell
