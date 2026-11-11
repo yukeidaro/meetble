@@ -1197,7 +1197,8 @@ $('#profForm').addEventListener('submit', async e => {
     await saveMe('/api/me/profile', 'PUT', { name: $('#pName').value.trim(), role: $('#pRole').value.trim(), location: $('#pLoc').value.trim(),
       background: split($('#pBg').value), looking_for: split($('#pLook').value), consent: $('#pConsent').checked,
       // keep structured offers (offer + details) when the text of an offer didn't change
-      offer_inventory_draft: split($('#pOffer').value).map(t => (Array.isArray(p0.offer_inventory_draft) ? p0.offer_inventory_draft : []).find(o => o && typeof o === 'object' && o.offer === t) || t) });
+      offer_inventory_draft: (pool => split($('#pOffer').value).map(t => { const i = pool.findIndex(o => o && typeof o === 'object' && o.offer === t); return i < 0 ? t : pool.splice(i, 1)[0]; }))
+        ((Array.isArray(p0.offer_inventory_draft) ? p0.offer_inventory_draft : []).slice()) }); // each saved object is used once, so duplicates keep their own details
     $('#profDlg').close();
   }catch(err){ $('#profErr').textContent = err.message; }
 });
