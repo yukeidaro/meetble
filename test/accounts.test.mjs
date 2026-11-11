@@ -89,3 +89,12 @@ describe("accounts", () => {
     expect(cookieValue("linkedin", '"AQE"')).toBe("AQE");
   });
 });
+
+import { publicHttpUrl } from "../server.mjs";
+describe("cloud event links", () => {
+  it("allows public event pages and refuses server-local destinations", () => {
+    for (const ok of ["https://luma.com/compiled-poy7", "https://lu.ma/x", "http://www.eventbrite.com/e/1"]) expect(publicHttpUrl(ok)).toBe(true);
+    for (const bad of ["http://127.0.0.1:8787/api", "http://localhost/", "http://169.254.169.254/latest", "http://metadata.google.internal/",
+      "http://[::1]/", "http://10.0.0.5/", "file:///etc/passwd", "http://intranet/", "https://a.com:8443/", "http://user:pw@a.com/", "http://0x7f000001/"]) expect(publicHttpUrl(bad)).toBe(false);
+  });
+});

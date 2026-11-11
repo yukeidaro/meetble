@@ -192,12 +192,13 @@ function toUiAction(a) {
 }
 
 // ---------- jobs ----------
+const launching = new Set(); // jobs whose server Chrome is still starting (even if already stopped): they count against MAX_RUNS
 const jobs = new Map(); // owner ("local", or the Google account id in cloud mode) -> the latest run
 
 function startJob(body, owner = "local", user = null) {
   const prev = jobs.get(owner);
   if (prev && !prev.done) stopJob(owner);
-  if ([...jobs.values()].filter((x) => !x.done).length >= MAX_RUNS) throw httpError(429, `The server is busy (${MAX_RUNS} runs going). Try again in a few minutes.`);
+  if (new Set([...[...jobs.values()].filter((x) => !x.done), ...launching]).size >= MAX_RUNS) throw httpError(429, `The server is busy (${MAX_RUNS} runs going). Try again in a few minutes.`);
   const ask = parseAsk(body.ask);
   if (body.name) ask.name = String(body.name).trim();
   const j = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), events: [], clients: new Set(), done: false, child: null, ask, owner, user, paths: pathsFor(owner), cleanup: [] };
@@ -264,6 +265,15 @@ function stepHandler(j, groupFor) {
   };
 }
 
+/** Cloud mode: event links are fetched by the server, so only public http(s) hosts (no IP literals, localhost or internal names). */
+export function publicHttpUrl(u) {
+  let x; try { x = new URL(String(u)); } catch { return false; }
+  if (!/^https?:$/.test(x.protocol) || x.username || x.password || (x.port && !["80", "443"].includes(x.port))) return false;
+  const h = x.hostname.toLowerCase().replace(/\.$/, "");
+  if (!h.includes(".") || h.startsWith("[") || /^[\d.]+$/.test(h) || /^(0x|\d)/.test(h.split(".").pop())) return false;
+  return !/(^|\.)(localhost|internal|local|localdomain|home|lan|corp|intranet)$/.test(h); // e.g. metadata.google.internal
+}
+
 /** Cloud mode: the person's profile file, and a headless Chrome signed in with their saved sessions (if any). */
 async function cloudSetup(j) {
   const u = j.user, env = {};
@@ -275,7 +285,8 @@ async function cloudSetup(j) {
     return env;
   }
   try {
-    const chrome = await launchSignedInChrome(cookies);
+    launching.add(j);
+    const chrome = await launchSignedInChrome(cookies).finally(() => launching.delete(j));
     if (j.done) { chrome.close(); return env; } // stopped or replaced while Chrome was starting
     j.cleanup.push(chrome.close);
     env.MEETBLE_CDP_URL = chrome.url;
@@ -307,7 +318,10 @@ async function run(j, body) {
     if (CLOUD) args.push("--profile", j.paths.profile);
     if (body.hint) args.push("--hint", String(body.hint));
     if (body.x_handle) args.push("--x-handle", String(body.x_handle).replace(/^@/, ""));
-    for (const u of [].concat(body.event_urls || []).filter(Boolean)) args.push("--event-url", String(u));
+    for (const u of [].concat(body.event_urls || []).filter(Boolean)) {
+      if (CLOUD && !publicHttpUrl(u)) throw new Error(`That event link isn't a public web address: ${String(u).slice(0, 80)}`);
+      args.push("--event-url", String(u));
+    }
     const r = await runProc(j, process.execPath, args, env, stepHandler(j, researchGroup));
     if (j.done) return;
     if (r.code !== 0 || !existsSync(RESEARCH)) throw new Error(`Research failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no output"}`);
