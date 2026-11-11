@@ -364,7 +364,7 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
 .total .tot-r .cap{font-size:24px;text-align:left;max-width:none}
 
 /* ---------- glass pass: the page takes its look from the orb ---------- */
-:root{--bg:#F5F4FA;--ink:#17152B;--muted:#6C6A80;--faint:#A9A7BC;--line:#E7E5F1;--soft:#F0EEF8;
+:root{--bg:#FFFFFF;--ink:#17152B;--muted:#6C6A80;--faint:#A9A7BC;--line:#E7E5F1;--soft:#F0EEF8;
   --a1:#7C74DE;--a2:#E39AC2;--a3:#D9D2FF;--ok:#2E9E7E;
   --glass:rgba(255,255,255,.58);--glass-b:rgba(255,255,255,.8);--hl:rgba(255,255,255,.75);
   --shadow:0 1px 1px rgba(30,20,90,.03),0 18px 48px -22px rgba(100,90,200,.32)}
@@ -432,10 +432,7 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
 .facts .fact.nk .src{padding-left:0}
 
 /* living background */
-#bgFlow{position:fixed;left:-10vw;top:-10vh;width:120vw;height:120vh;z-index:-3;pointer-events:none;filter:blur(28px) saturate(1.15);transition:opacity .8s}
-#grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.6}
-body.s-run body.s-run #bgFlow{opacity:.7}
-
+body.s-run body.s-run 
 /* ---------- motion pass: the page moves and changes color with the orb ---------- */
 :root{--p1:#a99bff;--p2:#f3a6cf;--p3:#8fd0ff;--t1:#5b4fd6;--t2:#c2468a;--t3:#2c7fc4}
 @property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
@@ -450,13 +447,7 @@ body.s-run body.s-run #bgFlow{opacity:.7}
 @keyframes nkflash{from{background:color-mix(in srgb,var(--p1) 24%,transparent)}to{background:transparent}}
 @keyframes dotsdrift{to{background-position:28px 56px}}
 /* background, round two */
-#bgFlow{filter:blur(24px)}
-#dots{position:fixed;inset:0;z-index:-3;pointer-events:none;opacity:.5;transition:opacity 1s;background-image:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--ink) 20%,transparent) 1px,transparent 1.6px);background-size:28px 28px;
-  -webkit-mask-image:radial-gradient(ellipse 85% 75% at 50% 42%,transparent 30%,#000 64%,transparent 100%);mask-image:radial-gradient(ellipse 85% 75% at 50% 42%,transparent 30%,#000 64%,transparent 100%);animation:dotsdrift 26s linear infinite}
-#edgeGlow{position:fixed;inset:0;width:100vw;height:100vh;z-index:60;pointer-events:none;opacity:0;transition:opacity 1.2s ease}
-body.working #edgeGlow{opacity:.85}
-body.s-run #dots{opacity:.22}
-/* header: the logo starts over */
+body.working body.s-run /* header: the logo starts over */
 .top{position:relative;z-index:5}
 button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(--ink);font:inherit;font-weight:600;font-size:15px;letter-spacing:-.01em}
 .brand svg{animation:spin 18s linear infinite}
@@ -468,11 +459,9 @@ button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(
 .hello b{font-weight:600;color:var(--t1);background:linear-gradient(100deg,var(--t1),var(--t2),var(--t3),var(--t1));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:textflow 7s linear infinite}
 /* the input glows and its border runs */
 .ask{position:relative}
-.ask::before{content:"";position:absolute;left:6%;right:6%;top:10px;height:60px;border-radius:40px;z-index:-1;pointer-events:none;background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3));filter:blur(30px);animation:glowpulse 4.2s ease-in-out infinite}
+.ask::before{display:none;content:"";position:absolute;left:6%;right:6%;top:10px;height:60px;border-radius:40px;z-index:-1;pointer-events:none;background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3));filter:blur(30px);animation:glowpulse 4.2s ease-in-out infinite}
 .ask-bar{position:relative}
-.ask-bar::before,.acct.on::before,.dcard::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1.5px;pointer-events:none;background:conic-gradient(from var(--ang),var(--p1),var(--p2),var(--p3),var(--p1));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:angspin 5s linear infinite}
-.ask-bar::before{opacity:.7;transition:opacity .3s}
-.ask-bar:focus-within::before{opacity:1}
+.acct.on::before,.dcard::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1.5px;pointer-events:none;background:conic-gradient(from var(--ang),var(--p1),var(--p2),var(--p3),var(--p1));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:angspin 5s linear infinite}
 .send,.go{position:relative;overflow:hidden;isolation:isolate}
 .send::before,.go::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.32) 50%,transparent 65%);transform:translateX(-130%);animation:sheen 3.6s ease-in-out infinite}
 .go{animation:gobreathe 4.2s ease-in-out infinite}
@@ -502,7 +491,7 @@ button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(
 <body>
 
 
-<canvas id="bgFlow" aria-hidden="true"></canvas><div id="dots" aria-hidden="true"></div><div id="grain" aria-hidden="true"></div><canvas id="edgeGlow" aria-hidden="true"></canvas>
+
 
 <header class="top">
   <button class="brand" id="homeBtn" type="button" title="Start over" aria-label="Meetble, start over"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.6 2.2"/><circle cx="9" cy="9" r="2.6" fill="currentColor"/></svg>Meetble</button>
@@ -894,27 +883,13 @@ class Orb{
 }
 const bigOrb = new Orb($('#bigOrb')), miniOrb = new Orb($('#miniOrb'), {strands:140, sparks:30, float:.6});
 
-/* ---------- living background: color fields from the orb's palette, the orb's light, a Siri-style edge glow while working ---------- */
+/* ---------- page accents follow the orb's colors; the page itself stays plain white ---------- */
 (() => {
-  const fc = $('#bgFlow'), fx = fc.getContext('2d'), ec = $('#edgeGlow'), ex = ec.getContext('2d'), orbEl = $('#bigOrb');
   let varT = -1e9, working = false;
   const root = document.documentElement, mq = matchMedia('(prefers-color-scheme: dark)');
   const isDark = () => root.dataset.theme === 'dark' || (root.dataset.theme !== 'light' && mq.matches);
-  let W = 0, H = 0, D = 1, t = 0, last = performance.now();
-  const size = () => { W = innerWidth; H = innerHeight; D = Math.min(devicePixelRatio || 1, 1.5);
-    fc.width = Math.max(40, Math.round(W/9)); fc.height = Math.max(30, Math.round(H/9));
-    ec.width = Math.max(40, Math.round(W/8)); ec.height = Math.max(30, Math.round(H/8)); };
-  addEventListener('resize', size); size();
-  { // film grain, made once
-    const g = document.createElement('canvas'); g.width = g.height = 140; const c = g.getContext('2d'), im = c.createImageData(140, 140);
-    for(let i = 0; i < im.data.length; i += 4){ const v = Math.random()*255|0; im.data[i] = im.data[i + 1] = im.data[i + 2] = v; im.data[i + 3] = 16; }
-    c.putImageData(im, 0, 0); $('#grain').style.backgroundImage = `url(${g.toDataURL()})`;
-  }
   function frame(now){
     requestAnimationFrame(frame);
-    if(W !== innerWidth || H !== innerHeight) size(); // also covers a page that loaded while hidden (size 0)
-    if(!W || !H) return;
-    const dt = Math.min(.05, Math.max(0, (now - last)/1000)); last = now; t += RM ? 0 : dt*(1 + 1.2*PAL.e); // everything moves faster while the agent works
     const P = palTick(now), pal = P.cur, dk = isDark();
     if(now - varT > 80){ varT = now; // the page's accent colors follow the orb
       const vs = pal.map(c => [rgb2hsl(c)[1], c]).sort((a, b) => b[0] - a[0]);
@@ -922,31 +897,6 @@ const bigOrb = new Orb($('#bigOrb')), miniOrb = new Orb($('#miniOrb'), {strands:
     }
     const busy = PAL.e > .3 && document.body.classList.contains('s-run');
     if(busy !== working){ working = busy; document.body.classList.toggle('working', busy); }
-    // 1) slow color fields, painted small and blurred by CSS
-    const w = fc.width, h = fc.height; fx.setTransform(1,0,0,1,0,0); fx.clearRect(0, 0, w, h);
-    for(let i = 0; i < 6; i++){ // vivid enough to read as color, not a tint
-      const cx = (.5 + .66*noise3(i*2.3, t*.085, 1.7))*w, cy = (.5 + .66*noise3(i*2.3 + 9, t*.075, 4.1))*h, rr = (.28 + .14*(1 + noise3(i, t*.1, 8.2)))*Math.max(w, h);
-      const src = i % 2 ? P.nxt[i] : pal[i], c = dk ? tone(src, .1, .3) : tone(src, .12, .9), g = fx.createRadialGradient(cx, cy, 0, cx, cy, rr);
-      g.addColorStop(0, rgba(c, dk ? .5 : .55)); g.addColorStop(.55, rgba(c, dk ? .18 : .2)); g.addColorStop(1, rgba(c, 0));
-      fx.fillStyle = g; fx.fillRect(0, 0, w, h);
-    }
-    // 2) the orb lights the room around it
-    const o = orbEl.getBoundingClientRect();
-    if(o.width){
-      const cx = (o.left + o.width/2)/W*w*(10/12) + w/12, cy = (o.top + o.height/2)/H*h*(10/12) + h/12, rr = o.width/W*w*1.3, c = dk ? P.glow : mixc(P.glow, WHITE, .75);
-      const g = fx.createRadialGradient(cx, cy, 0, cx, cy, rr); g.addColorStop(0, rgba(c, dk ? .55 : .95)); g.addColorStop(.5, rgba(c, dk ? .2 : .5)); g.addColorStop(1, rgba(c, 0));
-      fx.fillStyle = g; fx.fillRect(0, 0, w, h);
-    }
-    // 4) edge glow: colored light running around the screen edge, full strength while the agent works
-    const ew = ec.width, eh = ec.height, per = 2*(ew + eh), th = Math.min(ew, eh)*(working ? .085 : .06);
-    ex.setTransform(1,0,0,1,0,0); ex.globalCompositeOperation = 'source-over'; ex.clearRect(0, 0, ew, eh); ex.globalCompositeOperation = 'lighter';
-    for(let i = 0; i < 22; i++){ // many overlapping lights, so the edge reads as one band
-      let s = ((i/22 + t*.035) % 1)*per, px, py;
-      if(s < ew){ px = s; py = 0; } else if((s -= ew) < eh){ px = ew; py = s; } else if((s -= eh) < ew){ px = ew - s; py = eh; } else { px = 0; py = eh - (s - ew); }
-      const c = tone((i % 2 ? P.nxt : pal)[i % 6], .34, dk ? .6 : .62), rr = th*(2.1 + .6*Math.sin(t*1.3 + i*1.7)), g = ex.createRadialGradient(px, py, 0, px, py, rr);
-      g.addColorStop(0, rgba(c, .62)); g.addColorStop(.5, rgba(c, .22)); g.addColorStop(1, rgba(c, 0));
-      ex.fillStyle = g; ex.fillRect(px - rr, py - rr, 2*rr, 2*rr);
-    }
   }
   requestAnimationFrame(frame);
 })();
