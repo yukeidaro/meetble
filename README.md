@@ -119,6 +119,8 @@ python browser_tools.py linkedin-profile "Boris Jabes"
 
 The research run starts with a sign-in check of Luma, LinkedIn, X and Instagram in your Chrome. If a site is signed out, it lists the login pages and waits: you sign in yourself (Meetble never types a password), then press Enter. Set `LUMA_ACCOUNT` in `.env` to warn when Luma is signed in as the wrong account. Your upcoming Luma events are then checked for the target, so an event you're both at tonight shows up. You can also pass an event yourself with `--event-url https://luma.com/compiled-poy7` (repeatable) or a `my_events` list in `user_profile.json`.
 
+Network research: for each LinkedIn mutual connection (up to 5), Meetble searches for pages that name both of you and reads how they know each other (co-founded or worked together, invested, spoke on a podcast or panel). That intro card then moves up, with the source attached. Add an `affiliations` list to `user_profile.json` (your schools, past companies, communities) and Meetble also checks which of them the person shares, then suggests finding someone from there who knows them.
+
 ## The demo
 
 Goal: meet Boris Jabes. Deadline: tonight.

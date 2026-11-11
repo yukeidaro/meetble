@@ -38,6 +38,9 @@ export interface LiveAction {
   fits_deadline: boolean;
 }
 
+/** Inside plan/scoring.py's referral range (0.30-0.50) by tie strength: named together / spoke together / worked together. */
+const REFERRAL_BY_TIE = { 1: 0.3, 2: 0.4, 3: 0.5 } as const;
+
 /** plan/step5_actions.py UNVERIFIED_BOOKING_CAP: a booking page with no confirmed open slots. */
 const UNVERIFIED_BOOKING_CAP = 0.05;
 
@@ -58,6 +61,25 @@ export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAct
       return names.slice(0, 3).map((m) => mk("referral", `Ask ${m} for an intro to ${first}`,
         [`Check how well ${m} knows ${first} (shared company, investments, replies)`, `Send ${m} a short note asking for a two-line intro`],
         f.source_url, 0, 0.3, 3, `${m} is a mutual LinkedIn connection`, m));
+    }
+    case "mutual_tie": {
+      // A mutual the web shows actually knows the target: the same intro card, now with how they know each other,
+      // and a rate inside the referral range by how close the tie is (3: worked/co-founded -> top of the range).
+      const m = typeof d.mutual === "string" ? d.mutual : "";
+      if (!m) return [];
+      const strength = Number(d.strength) || 1;
+      const a = mk("referral", `Ask ${m} for an intro to ${first}`,
+        [`${m} and ${first}: ${String(d.tie ?? "named together")} (see the source)`, `Send ${m} a short note asking for a two-line intro, mentioning that connection`],
+        f.source_url, 0, 0.3, 3, `${m} is a mutual connection, and ${String(d.tie ?? "they are named together")}`, m);
+      a.p = REFERRAL_BY_TIE[Math.min(3, Math.max(1, strength)) as 1 | 2 | 3];
+      return [a];
+    }
+    case "shared_affiliation": {
+      const aff = typeof d.affiliation === "string" ? d.affiliation : "";
+      if (!aff) return [];
+      return [mk("network_first", `Find someone from ${aff} who knows ${first}`,
+        [`Search LinkedIn for ${aff} people connected to ${first}`, `Ask one of them for an intro, or open your note to ${first} with the shared ${aff} background`],
+        f.source_url, 0, 1, 4, `You and ${first} share ${aff}`, aff)];
     }
     case "inner_circle": {
       const h = typeof d.handle === "string" ? d.handle : "";
@@ -111,12 +133,12 @@ export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAct
 
 /** Dedupes by type+title, caps posts and inner-circle cards so the deck stays useful, assigns ids. */
 export class LiveActions {
-  private seen = new Set<string>();
+  private byKey = new Map<string, LiveAction>();
   private perType = new Map<string, number>();
   private seq = 0;
   readonly list: LiveAction[] = [];
   /** Caps per finding kind (not per action type): precedents and inner-circle contacts both make network_first cards. */
-  private static CAP: Record<string, number> = { post: 2, inner_circle: 4, precedent: 2, mutuals: 5, event: 4 };
+  private static CAP: Record<string, number> = { post: 2, inner_circle: 4, precedent: 2, mutuals: 5, mutual_tie: 5, event: 4, shared_affiliation: 3 };
 
   constructor(private readonly targetName: () => string, private readonly onAction: (a: LiveAction) => void,
     private readonly daysLeft?: number, private readonly deadline?: string) {}
@@ -125,10 +147,21 @@ export class LiveActions {
     for (const a of actionsFromFinding(f, this.targetName())) {
       // By type+title: two sources for the same advice (e.g. two precedent write-ups) are one card.
       const key = `${a.type}|${a.title}`.toLowerCase();
-      if (this.seen.has(key)) continue;
+      const had = this.byKey.get(key);
+      if (had) {
+        // The web shows how a mutual knows the target: upgrade their intro card in place (same id, so the UI
+        // replaces it) instead of adding a second card for the same person.
+        if (a.from_kind === "mutual_tie" && a.p > had.p) {
+          const up: LiveAction = { ...had, ...a, id: had.id, from_kind: had.from_kind, evidence: [...had.evidence, ...a.evidence],
+            reasons: { ...had.reasons, ...a.reasons } };
+          this.list[this.list.indexOf(had)] = up;
+          this.byKey.set(key, up);
+          this.onAction(up);
+        }
+        continue;
+      }
       const n = this.perType.get(a.from_kind) ?? 0;
       if (n >= (LiveActions.CAP[a.from_kind] ?? 3)) continue;
-      this.seen.add(key);
       this.perType.set(a.from_kind, n + 1);
       // Events fit only by their confirmed date (find_events also returns events a few days past the deadline);
       // an undated event stays unconfirmed. Other routes fit by their own days_to_outcome.
@@ -137,6 +170,7 @@ export class LiveActions {
         : this.daysLeft === undefined || a.days_to_outcome <= Math.max(this.daysLeft, 0.5);
       const full: LiveAction = { ...a, id: `live${++this.seq}`, provisional: true, fits_deadline: fits, in_total: fits };
       this.list.push(full);
+      this.byKey.set(key, full);
       this.onAction(full);
     }
   }

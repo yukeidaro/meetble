@@ -87,7 +87,7 @@ export function parseLine(raw) {
 const G = { 0: "Step 0 · Who", 1: "Step 1 · What they want", 2: "Step 2 · Right now", 3: "Step 3 · Needs", 4: "Step 4 · Interview", 5: "Step 5 · Plan" };
 function researchGroup(label) {
   if (/signed in|Re-checking sign|Luma events|^Identifying|X account|Sign in/i.test(label)) return G[0];
-  if (/this week|events .* joins|booking page/i.test(label)) return G[2];
+  if (/this week|events .* joins|booking page|mutuals know|background you share/i.test(label)) return G[2];
   return G[1];
 }
 function domainOf(label) {
@@ -236,7 +236,12 @@ function stepHandler(j, groupFor) {
     // run's nonce count, so text from a web page that ends up in a checklist note can't forge a card.
     const tag = `ACTION:${j.nonce} `;
     if (line.startsWith(tag)) {
-      try { const a = JSON.parse(line.slice(tag.length)); j.live.push(a); j.push({ type: "action", action: toUiAction(a) }); } catch {}
+      try {
+        const a = JSON.parse(line.slice(tag.length));
+        const i = j.live.findIndex((x) => x.id === a.id); // same id = an upgraded card (e.g. how a mutual knows them)
+        if (i >= 0) j.live[i] = a; else j.live.push(a);
+        j.push({ type: "action", action: toUiAction(a) });
+      } catch {}
       return;
     }
     const s = parseLine(line);
