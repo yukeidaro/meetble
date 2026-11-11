@@ -1063,7 +1063,7 @@ function onMeta(ev){
 async function runLive(){
   const my = ++runId;
   // A new run starts with an empty deck: live card ids (live1, live2, ...) restart each run.
-  actions = []; filter = 'all'; openConfirm = null; cur = 0; Object.keys(status).forEach(k => delete status[k]);
+  pTotal = null; actions = []; filter = 'all'; openConfirm = null; cur = 0; Object.keys(status).forEach(k => delete status[k]);
   $('#planCnt').textContent = ''; $('#tabPlan').disabled = true;
   $('#meBubble').textContent = $('#saidText').textContent;
   setState('Researching…', 'busy'); liveStart();
