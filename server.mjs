@@ -277,21 +277,83 @@ async function run(j, body) {
   if (!actions.length) throw new Error("No actions came back from Step 5");
 }
 
-// ---------- sign-ins: the same check the research pre-flight runs, in your own Chrome (browser_tools.py login-check) ----------
-let logins = null, loginsAt = 0, loginsBusy = null;
+// ---------- sign-ins: read your Chrome's session cookies over CDP (no agent, no tab opened, answers in under a second) ----------
+// One WebSocket to Chrome stays open, so Chrome's "Allow remote debugging?" prompt is clicked once per server run, not per check.
+// Same rules as browser_tools.py cookie-check.
+const LOGIN_URLS = { luma: "https://luma.com/signin", linkedin: "https://www.linkedin.com/login", x: "https://x.com/login", instagram: "https://www.instagram.com/accounts/login/" };
+const SESSION_COOKIES = {
+  luma: [["luma.com", "lu.ma"], (n) => /auth/i.test(n)], // luma.auth-session-key
+  linkedin: [["linkedin.com"], (n) => n === "li_at"],
+  x: [["x.com", "twitter.com"], (n) => n === "auth_token"],
+  instagram: [["instagram.com"], (n) => n === "sessionid"],
+};
+export function sitesFromCookies(cookies, now = Date.now() / 1000) {
+  const sites = {};
+  for (const [site, [domains, isSession]] of Object.entries(SESSION_COOKIES)) {
+    const hit = cookies.some((c) => domains.some((d) => c.domain.replace(/^\./, "") === d || c.domain.endsWith("." + d))
+      && isSession(c.name) && c.value && (c.session || !(c.expires > 0) || c.expires > now));
+    sites[site] = { logged_in: hit, account: "" };
+  }
+  return sites;
+}
+function devToolsUrl() {
+  if (process.env.MEETBLE_CDP_URL) return process.env.MEETBLE_CDP_URL;
+  const local = process.env.LOCALAPPDATA || "", home = process.env.HOME || process.env.USERPROFILE || "";
+  const dirs = [join(local, "Google", "Chrome", "User Data"), join(local, "Google", "Chrome Dev", "User Data"), join(local, "Google", "Chrome SxS", "User Data"),
+    join(home, "Library", "Application Support", "Google", "Chrome"), join(home, ".config", "google-chrome")];
+  for (const d of dirs) {
+    const f = join(d, "DevToolsActivePort");
+    if (!existsSync(f)) continue;
+    const [port, path] = readFileSync(f, "utf8").split(/\s+/);
+    if (port && path) return `ws://127.0.0.1:${port}${path}`;
+  }
+  return null;
+}
+const HOW_TO_ON = "Turn on remote debugging: open chrome://inspect/#remote-debugging in Chrome, switch it on, then press Check again.";
+let cdp = null; // { ws, open: Promise, calls: Map }
+function cdpConnect(url) {
+  const ws = new WebSocket(url), calls = new Map(), c = { ws, calls, url };
+  c.open = new Promise((resolve, reject) => {
+    const t = setTimeout(() => { reject(Object.assign(new Error("allow"), { code: "allow" })); try { ws.close(); } catch {} }, 120_000);
+    ws.onopen = () => { clearTimeout(t); resolve(); };
+    ws.onerror = () => { clearTimeout(t); reject(Object.assign(new Error("unreachable"), { code: "unreachable" })); };
+  });
+  ws.onmessage = (m) => { const d = JSON.parse(String(m.data)); const k = calls.get(d.id); if (k) { calls.delete(d.id); d.error ? k.reject(new Error(d.error.message)) : k.resolve(d.result); } };
+  ws.onclose = () => { if (cdp === c) cdp = null; for (const k of calls.values()) k.reject(new Error("Chrome closed the connection")); };
+  c.send = (method, params = {}) => new Promise((resolve, reject) => {
+    const id = (c.n = (c.n || 0) + 1);
+    calls.set(id, { resolve, reject });
+    ws.send(JSON.stringify({ id, method, params }));
+    setTimeout(() => calls.has(id) && (calls.delete(id), reject(new Error("Chrome did not answer"))), 15_000);
+  });
+  return c;
+}
+let logins = null, loginsAt = 0, loginsBusy = null, loginPhase = "idle"; // idle | connecting | reading
+async function cookieCheck() {
+  if (typeof WebSocket === "undefined") return { error: "This needs Node 22 or newer (node -v).", code: "node" };
+  const url = devToolsUrl();
+  if (!url) return { error: "Chrome's remote debugging is off. " + HOW_TO_ON, code: "off" };
+  if (!cdp || cdp.url !== url) { try { cdp?.ws.close(); } catch {} cdp = cdpConnect(url); }
+  const c = cdp;
+  try { loginPhase = "connecting"; await c.open; }
+  catch (e) {
+    if (cdp === c) cdp = null;
+    return e.code === "allow"
+      ? { error: "Chrome is waiting for you to click Allow on its remote-debugging prompt. Click Allow, then press Check again.", code: "allow" }
+      : { error: "Chrome isn't reachable (is it open, with remote debugging on?). " + HOW_TO_ON, code: "unreachable" };
+  }
+  loginPhase = "reading";
+  const { cookies } = await c.send("Storage.getCookies");
+  const sites = sitesFromCookies(cookies || []);
+  return { sites, signed_out: Object.keys(sites).filter((s) => !sites[s].logged_in), method: "cookies" };
+}
 async function checkLogins(force) {
-  if (!force && logins && Date.now() - loginsAt < 60_000) return logins;
+  if (!force && logins && !logins.error && Date.now() - loginsAt < 15_000) return logins;
   if (!loginsBusy) loginsBusy = (async () => {
-    try {
-      const { loadDotEnv } = await import("./dist/core/env.js");
-      loadDotEnv(join(ROOT, ".env"));
-      const { loginCheck, LOGIN_URLS } = await import("./dist/tools/browser_session.js");
-      const r = await loginCheck({}, null, { cwd: ROOT, env: process.env, timeoutMs: 180_000 });
-      logins = { ...r, urls: LOGIN_URLS };
-    } catch (e) {
-      logins = { error: String(e?.message || e).slice(0, 200) };
-    }
-    loginsAt = Date.now(); loginsBusy = null;
+    try { logins = await cookieCheck(); }
+    catch (e) { logins = { error: "Couldn't read sign-ins from Chrome: " + String(e?.message || e).slice(0, 160), code: "failed" }; }
+    logins = { ...logins, urls: LOGIN_URLS, checked_at: new Date().toISOString() };
+    loginsAt = Date.now(); loginsBusy = null; loginPhase = "idle";
     return logins;
   })();
   return loginsBusy;
@@ -316,6 +378,7 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === "GET" && (p === "/" || p === "/index.html")) return send(res, 200, readFileSync(join(ROOT, "ui", "index.html")), MIME[".html"]);
     if (TOKEN && p.startsWith("/api/") && p !== "/api/health" && url.searchParams.get("token") !== TOKEN) return send(res, 401, { error: "missing or wrong token" });
+    if (p === "/api/logins/phase") return send(res, 200, { phase: loginPhase });
     if (p === "/api/logins") return send(res, 200, await checkLogins(url.searchParams.has("refresh")));
     if (p === "/api/health") return send(res, 200, { ok: true, has_dist: existsSync(join(ROOT, "dist", "cli.js")), has_research: existsSync(RESEARCH), has_profile: existsSync(join(ROOT, "user_profile.json")), has_env: existsSync(join(ROOT, ".env")) });
     if (p === "/api/parse") return send(res, 200, parseAsk(url.searchParams.get("ask")));
@@ -346,4 +409,4 @@ const server = createServer(async (req, res) => {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   server.listen(PORT, HOST, () => console.log(`Meetble is running on ${HOST}:${PORT}`));
 }
-export { server, toUiAction, findingEvents, dateOf, nicheOf };
+export { server, toUiAction, findingEvents, dateOf, nicheOf, checkLogins };

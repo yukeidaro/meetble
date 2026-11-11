@@ -8,7 +8,8 @@ Setup (once):
   Be logged in to luma.com and linkedin.com in that Chrome.
 
 Usage (each prints one JSON object, so the Next.js app can call it with child_process):
-  python browser_tools.py login-check                              # are Luma + LinkedIn signed in? (run first)
+  python browser_tools.py cookie-check                             # fast: signed in to Luma/LinkedIn/X/Instagram? (cookies, no LLM, no tab)
+  python browser_tools.py login-check                              # same answer, read by an agent (slow)
   python browser_tools.py luma-my-events                           # upcoming events I am registered for / hosting
   python browser_tools.py luma-check   https://luma.com/compiled-poy7
   python browser_tools.py luma-register https://luma.com/compiled-poy7
@@ -42,7 +43,7 @@ try:
 except Exception:
     pass
 
-from browser_use import Agent, Browser, ChatAnthropic
+# browser_use is imported inside run(), so cookie-check starts in well under a second.
 
 # browser-use 0.13 also wraps connect()/reconnect() in asyncio.wait_for(..., timeout=15.0)
 # (browser_use/browser/session.py). Stretch exactly those 15 s limits so Yu has time to click Allow.
@@ -136,16 +137,63 @@ def your_chrome_cdp_url():
     return None
 
 
-def run(task: str, schema):
+# A site counts as signed in when its session cookie is in your Chrome (and not expired). Same rules as server.mjs.
+SESSION_COOKIES = {
+    "luma": (("luma.com", "lu.ma"), lambda n: "auth" in n.lower()),          # luma.auth-session-key
+    "linkedin": (("linkedin.com",), lambda n: n == "li_at"),
+    "x": (("x.com", "twitter.com"), lambda n: n == "auth_token"),
+    "instagram": (("instagram.com",), lambda n: n == "sessionid"),
+}
+
+
+def cookie_check():
+    """Which sites are signed in, read from your Chrome's cookies over one CDP call: no agent, no tab opened,
+    one Allow click. Prints the same shape as login-check."""
+    import time
     cdp = your_chrome_cdp_url()
     if not cdp:
         return {"error": "Chrome remote debugging is off: open chrome://inspect/#remote-debugging, turn it on, click Allow"}
-    agent = Agent(
-        task,
+    from websockets.sync.client import connect
+    try:
+        with connect(cdp, open_timeout=_CDP_WAIT, max_size=None) as ws:
+            ws.send(json.dumps({"id": 1, "method": "Storage.getCookies"}))
+            while True:
+                msg = json.loads(ws.recv(timeout=30))
+                if msg.get("id") == 1:
+                    break
+    except TimeoutError:
+        return {"error": "Chrome did not answer: click Allow on Chrome's remote-debugging prompt, then try again"}
+    except OSError as e:
+        return {"error": f"Chrome is not reachable (is it open with remote debugging on?): {e}"}
+    if "error" in msg:
+        return {"error": f"Chrome refused the cookie read: {msg['error'].get('message', msg['error'])}"}
+    now = time.time()
+    out = {}
+    for site, (domains, is_session) in SESSION_COOKIES.items():
+        hit = [c for c in msg["result"]["cookies"]
+               if any(c["domain"].lstrip(".") == d or c["domain"].endswith("." + d) for d in domains)
+               and is_session(c["name"]) and c.get("value") and (c.get("session") or c.get("expires", -1) <= 0 or c["expires"] > now)]
+        out[site] = {"logged_in": bool(hit), "account": ""}
+    return out
+
+
+def run(task: str, schema):
+    from browser_use import Agent, Browser, ChatAnthropic
+    cdp = your_chrome_cdp_url()
+    if not cdp:
+        return {"error": "Chrome remote debugging is off: open chrome://inspect/#remote-debugging, turn it on, click Allow"}
+    kw = dict(
         llm=ChatAnthropic(MODEL),
         browser=Browser(cdp_url=cdp, keep_alive=True),  # YOUR running Chrome: your cookies and logins; never closed
         output_model_schema=schema,
     )
+    # browser-use takes over the first open tab, which is often the Meetble page, and then there is no way back.
+    # Start the agent in a tab of its own instead.
+    task = "Work only in the tab you start in; never switch to or navigate other tabs. " + task
+    try:
+        agent = Agent(task, initial_actions=[{"navigate": {"url": "about:blank", "new_tab": True}}], **kw)
+    except TypeError:  # a browser-use without initial_actions
+        agent = Agent(task, **kw)
     # No timeout= here: browser-use 0.13.x (the newest on some feeds) rejects it. The Node caller kills us after 300 s.
     history = agent.run_sync(max_steps=30)
     out = getattr(history, "structured_output", None)  # not on every browser-use version
@@ -225,6 +273,7 @@ def main():
     p = argparse.ArgumentParser()
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("login-check")
+    sub.add_parser("cookie-check")
     sub.add_parser("luma-my-events")
     sub.add_parser("luma-check").add_argument("url")
     sub.add_parser("luma-register").add_argument("url")
@@ -233,7 +282,9 @@ def main():
     c.add_argument("url"); c.add_argument("note"); c.add_argument("--send", action="store_true")
     a = p.parse_args()
 
-    if a.cmd == "login-check":
+    if a.cmd == "cookie-check":
+        out = cookie_check()
+    elif a.cmd == "login-check":
         out = login_check()
     elif a.cmd == "luma-my-events":
         out = luma_my_events()

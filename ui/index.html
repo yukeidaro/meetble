@@ -488,6 +488,21 @@ button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(
 .pbar .trk i{background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3))}
 /* the input always shows its lavender border and soft ring, not only while typing */
 .ask-bar,.ask-bar:focus-within{border-color:color-mix(in srgb,var(--a1) 35%,var(--line));box-shadow:0 0 0 5px color-mix(in srgb,var(--a1) 9%,transparent),var(--shadow)}
+/* sign-in states on the account cards (live mode): checking, connected (green), not signed in, can't check */
+.acct.ls-ok{border:1.5px solid var(--ok)!important;background:color-mix(in srgb,var(--ok) 8%,var(--surface,#fff))!important}
+.acct.ls-ok::before{display:none}
+.acct.ls-ok .ic{background:var(--ok)!important;color:#fff!important;box-shadow:none!important}
+.acct.ls-ok .st{color:var(--ok);font-weight:600}
+.acct.ls-ok .st::before{content:"✓";width:auto;height:auto;background:none;font-weight:700}
+.acct.ls-chk .st{color:var(--muted)}
+.acct.ls-chk .st::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--muted);animation:blink 1s ease-in-out infinite}
+@keyframes blink{50%{opacity:.2}}
+.acct.ls-out .st{color:var(--warn)}
+.acct.ls-bad .st{color:#C0392B}
+.login-note{font-size:12.5px;color:var(--muted);text-align:center;line-height:1.5;max-width:560px;margin:0 auto}
+.login-note.bad{color:#C0392B}
+.login-note.ok{color:var(--ok)}
+.login-note .try{margin-left:6px}
 </style>
 </head>
 <body>
@@ -517,7 +532,7 @@ button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(
   <section class="connect" aria-label="Link accounts">
     <p class="sub">Each account unlocks a research track. The more you link, the deeper the agent digs.</p>
     <div class="accts" id="accts"></div>
-    <div class="mode"><span id="loginNote"></span> <button class="try" id="recheckBtn" type="button" hidden>Re-check sign-ins</button></div>
+    <div class="mode login-note" id="loginBox" role="status" aria-live="polite"><span id="loginNote"></span> <button class="try" id="recheckBtn" type="button" hidden>Check again</button></div>
     <div class="depth">
       <span class="lbl">Research depth<span id="depthN"></span></span>
       <div class="pips" id="pips"></div>
@@ -914,33 +929,74 @@ const ACCTS = [
 ];
 const NTRACKS = 6; // web + podcasts need only API keys, plus one per research account
 const LOGIN_URL = {luma:'https://luma.com/signin', linkedin:'https://www.linkedin.com/login', x:'https://x.com/login', instagram:'https://www.instagram.com/accounts/login/'};
-let loginState = null, pendingLogin = false; // live: real sign-in status from your Chrome // web + podcasts need only API keys, plus one per research account
+let loginState = null, pendingLogin = null; // live: real sign-in status read from your Chrome's cookies (server.mjs /api/logins)
 const isOn = k => ACCTS.find(a => a.key === k)?.on ?? true;
 const acctName = k => ACCTS.find(a => a.key === k)?.nm;
+const siteOf = a => loginState && typeof loginState === 'object' ? loginState.sites?.[a.key] : null;
+// card state: chk (checking) | ok (connected, green) | out (not signed in) | bad (couldn't check) | off (signed in, but you turned it off)
+function acctMode(a){
+  if(!(LIVE && LOGIN_URL[a.key])) return a.on ? 'ok' : '';
+  if(loginState === 'checking') return 'chk';
+  if(loginState?.error) return a.on ? 'ok' : 'bad';
+  const s = siteOf(a);
+  if(!s) return a.on ? 'ok' : '';
+  return s.logged_in ? (a.on ? 'ok' : 'off') : 'out';
+}
 function acctStatus(a){
+  const m = acctMode(a);
   if(LIVE && LOGIN_URL[a.key]){
-    if(loginState === 'checking') return 'Checking…';
-    if(loginState?.sites?.[a.key]) return a.on ? esc(loginState.sites[a.key].account || 'Signed in') : 'Sign in';
-    if(loginState) return a.on ? 'Connected' : 'Sign in';
+    if(m === 'chk') return 'Checking…';
+    if(m === 'ok') return 'Connected';
+    if(m === 'off') return 'Not used · click to use';
+    if(m === 'out') return pendingLogin === a.key ? 'Signing in… (new tab)' : 'Not signed in · Sign in ↗';
+    if(m === 'bad') return 'Can\'t check · Sign in ↗';
   }
   return a.on ? 'Connected' : a.plan ? 'Link for free time' : 'Link to unlock';
 }
-async function refreshLogins(force){
-  if(!LIVE) return;
-  loginState = 'checking'; renderAccts();
-  $('#loginNote').textContent = 'Checking your sign-ins in Chrome… (up to a minute)';
-  try{
-    const r = await (await fetch(q('/api/logins' + (force ? '?refresh=1' : '')))).json();
-    loginState = r;
-    if(r.sites) for(const a of ACCTS) if(r.sites[a.key]) a.on = !!r.sites[a.key].logged_in;
-    $('#loginNote').textContent = r.error ? (/no result|DevToolsActivePort|connect|attach|CDP/i.test(r.error) ? 'Chrome isn\'t reachable yet: open chrome://inspect/#remote-debugging in this Chrome, turn remote debugging on (Allow), then press Re-check sign-ins.' : 'Could not check sign-ins: ' + r.error) : r.skipped ? 'Sign-in check skipped: ' + (r.reason || '') : 'Click an account to sign in to it in a new tab, then come back here.';
-  }catch{ loginState = {}; $('#loginNote').textContent = 'Could not check sign-ins.'; }
-  renderAccts();
+function setLoginNote(text, cls){
+  $('#loginNote').textContent = text;
+  $('#loginBox').className = 'mode login-note' + (cls ? ' ' + cls : '');
 }
-addEventListener('focus', () => { if(pendingLogin){ pendingLogin = false; refreshLogins(true); } }); // back from the login tab: re-check
+let checkSeq = 0;
+async function refreshLogins(force, quiet){
+  if(!LIVE) return;
+  const seq = ++checkSeq;
+  if(!quiet){
+    loginState = 'checking'; renderAccts();
+    setLoginNote('Checking your sign-ins in Chrome…');
+    $('#recheckBtn').hidden = true;
+  }
+  // Chrome may ask "Allow remote debugging?" the first time. Say so if the check is still waiting after 3 s.
+  const hint = setTimeout(async () => {
+    try{ const p = await (await fetch(q('/api/logins/phase'))).json();
+      if(seq === checkSeq && loginState === 'checking' && p.phase === 'connecting') setLoginNote('Waiting for Chrome: click Allow on its "remote debugging" prompt (only once per session).'); }catch{}
+  }, 3000);
+  let r;
+  try{ r = await (await fetch(q('/api/logins' + (force ? '?refresh=1' : '')))).json(); }
+  catch{ r = {error: 'The local server didn\'t answer. Is node server.mjs still running?'}; }
+  clearTimeout(hint);
+  if(seq !== checkSeq) return;
+  if(quiet && r.error) return; // background poll: keep what's on screen
+  loginState = r;
+  if(r.sites) for(const a of ACCTS) if(r.sites[a.key]) a.on = !!r.sites[a.key].logged_in;
+  const on = ACCTS.filter(a => r.sites?.[a.key]?.logged_in).map(a => a.nm);
+  const out = ACCTS.filter(a => r.sites?.[a.key] && !r.sites[a.key].logged_in).map(a => a.nm);
+  if(r.error) setLoginNote('Couldn\'t check sign-ins. ' + r.error, 'bad');
+  else if(!out.length) setLoginNote('All set: ' + on.join(', ') + ' connected.', 'ok');
+  else if(pendingLogin && !r.sites?.[pendingLogin]?.logged_in) setLoginNote('Waiting for you to sign in to ' + acctName(pendingLogin) + ' in the other tab. This card turns green by itself when you\'re signed in.');
+  else setLoginNote((on.length ? on.join(', ') + ' connected. ' : '') + 'Click ' + out.join(' or ') + ' to sign in. It opens in a new tab; come back to this tab when you\'re done and it updates by itself.');
+  $('#recheckBtn').hidden = false;
+  renderAccts();
+  if(pendingLogin && r.sites?.[pendingLogin]?.logged_in) pendingLogin = null;
+}
+// Back from the sign-in tab: check again. Also poll while a sign-in tab is open, so the card turns green on its own.
+const backFromLogin = () => { if(pendingLogin && document.visibilityState === 'visible') refreshLogins(true); };
+addEventListener('focus', backFromLogin);
+document.addEventListener('visibilitychange', backFromLogin);
+setInterval(() => { if(pendingLogin && loginState !== 'checking') refreshLogins(true, true); }, 4000);
 function renderAccts(){
   $('#accts').innerHTML = ACCTS.map(a => `
-    <button class="acct ${a.on?'on':''}" type="button" data-k="${a.key}" aria-pressed="${a.on}">
+    <button class="acct ${a.on?'on':''} ${acctMode(a) ? 'ls-' + acctMode(a) : ''}" type="button" data-k="${a.key}" aria-pressed="${a.on}">
       <span class="ic">${a.ic}</span><span class="nm">${a.nm}</span><span class="st">${acctStatus(a)}</span>
     </button>`).join('');
   const research = ACCTS.filter(a => a.on && !a.plan), n = 2 + research.length;
@@ -952,7 +1008,13 @@ $('#recheckBtn').addEventListener('click', () => refreshLogins(true));
 $('#accts').addEventListener('click', e => {
   const b = e.target.closest('.acct'); if(!b) return;
   const a = ACCTS.find(x => x.key === b.dataset.k);
-  if(LIVE && LOGIN_URL[a.key] && !a.on){ pendingLogin = true; window.open(LOGIN_URL[a.key], '_blank'); return; } // you sign in yourself; we never see the password
+  if(LIVE && LOGIN_URL[a.key] && loginState === 'checking') return;
+  if(LIVE && LOGIN_URL[a.key] && !a.on && acctMode(a) !== 'off'){
+    // You sign in yourself in a NEW tab (we never see the password); this tab stays here, and the card turns green when you come back.
+    pendingLogin = a.key; window.open(LOGIN_URL[a.key], '_blank', 'noopener'); renderAccts();
+    setLoginNote('Opened the ' + a.nm + ' sign-in page in a new tab. Sign in there, then come back to this tab.');
+    return;
+  }
   a.on = !a.on; renderAccts(); $(`.acct[data-k="${a.key}"]`).classList.add('pop');
 });
 renderAccts();
