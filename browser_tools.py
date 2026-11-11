@@ -57,7 +57,8 @@ async def _patient_wait_for(aw, timeout=None):
 
 _asyncio.wait_for = _patient_wait_for
 
-MODEL = os.environ.get("HF_BROWSER_MODEL", "claude-sonnet-5-5")
+# claude-sonnet-5-5 rejects browser-use's forced tool_choice (400); haiku-5-5 works (live, 2026-11-11).
+MODEL = os.environ.get("HF_BROWSER_MODEL", "claude-haiku-5-5")
 
 
 # ---------- output schemas ----------
