@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600&family=Geist+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: one quiet centered column (ask → link accounts), then two columns (live checklist + chat | board). A dotted particle sphere is the agent; an aurora glow sits behind. */
+/* Layout: one quiet centered column (ask → link accounts), then two columns (live checklist + chat | board). A glowing bubble orb is the agent; a living color field and floating bubbles sit behind. */
 :root{
   --bg:#FAFAFB; --surface:#FFFFFF; --ink:#0F0F14; --muted:#6B6B76; --faint:#A8A8B2; --line:#ECECF0; --soft:#F3F3F6;
   --a1:#5A4BFF; --a2:#FF6A2B; --a3:#D9CCFF; --ok:#10966C; --warn:#B4690E;
@@ -42,13 +42,6 @@ button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 .mono{font-family:var(--fm)}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow)}
 
-/* aurora */
-.aurora{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
-.aurora i{position:absolute;border-radius:50%;filter:blur(80px);opacity:.55;animation:float 22s ease-in-out infinite}
-.aurora i:nth-child(1){width:46vmax;height:30vmax;left:8%;top:-8vmax;background:var(--a3)}
-.aurora i:nth-child(2){width:26vmax;height:20vmax;right:6%;top:12vh;background:var(--a1);opacity:.14;animation-delay:-7s}
-.aurora i:nth-child(3){width:24vmax;height:18vmax;left:30%;top:30vh;background:var(--a2);opacity:.10;animation-delay:-14s}
-body.s-run .aurora i{opacity:.25} body.s-run .aurora i:nth-child(n+2){opacity:.06}
 @keyframes float{50%{transform:translate(4vmax,3vmax) scale(1.08)}}
 
 /* top bar */
@@ -62,10 +55,10 @@ body.s-run .aurora i{opacity:.25} body.s-run .aurora i:nth-child(n+2){opacity:.0
 
 /* ---------- intro: ask + link accounts ---------- */
 #intro{max-width:720px;margin:0 auto;display:flex;flex-direction:column;align-items:center;padding-block:3vh 48px}
-.orb-wrap{width:320px;height:320px;margin:-30px 0 -40px;transition:width .8s cubic-bezier(.2,.8,.2,1),height .8s cubic-bezier(.2,.8,.2,1),margin .8s}
-body.s-connect .orb-wrap{width:170px;height:170px;margin:-24px 0 -30px}
+.orb-wrap{width:440px;height:440px;margin:-84px 0 -96px;touch-action:manipulation;transition:width .8s cubic-bezier(.2,.8,.2,1),height .8s cubic-bezier(.2,.8,.2,1),margin .8s}
+body.s-connect .orb-wrap{width:210px;height:210px;margin:-44px 0 -50px}
 .orb-wrap canvas{width:100%;height:100%;display:block}
-.kicker{font-family:var(--fm);font-size:11.5px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase;margin-top:6px}
+.kicker{font-family:var(--fm);font-size:11.5px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-top:6px}
 .hello{font-size:clamp(34px,5.2vw,56px);font-weight:200;letter-spacing:-.035em;text-align:center;margin:8px 0 30px;line-height:1.05;text-wrap:balance}
 .hello b{font-weight:500}
 .ask{width:100%;display:flex;flex-direction:column;gap:12px}
@@ -93,7 +86,7 @@ body.s-connect .hello{margin-bottom:22px}
 body.s-connect .connect{display:flex}
 @keyframes rise{from{opacity:0;transform:translateY(16px)}}
 .connect .sub{margin:0;color:var(--muted);text-align:center;font-size:14px}
-.accts{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+.accts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
 .acct{position:relative;border:1px dashed color-mix(in srgb,var(--faint) 70%,transparent);background:transparent;border-radius:18px;padding:18px 8px 14px;display:flex;flex-direction:column;align-items:center;gap:10px;transition:transform .25s,background .3s,border-color .3s,box-shadow .3s}
 .acct:hover{transform:translateY(-2px)}
 .acct .ic{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;font-family:var(--fm);font-weight:500;font-size:13.5px;color:var(--faint);background:var(--soft);transition:all .3s}
@@ -121,7 +114,7 @@ body.s-run #intro{display:none}
 body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
 .left{display:flex;flex-direction:column;gap:14px;min-width:0;position:sticky;top:12px;height:calc(100vh - 92px)}
 .agent{display:flex;align-items:center;gap:12px}
-.agent canvas{width:64px;height:64px;flex:none;margin:-8px}
+.agent canvas{width:72px;height:72px;flex:none;margin:-12px}
 .agent b{font-size:15px;font-weight:600;display:block;letter-spacing:-.01em}
 .agent span{color:var(--muted);font-size:13px}
 .feed{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding:2px 2px 8px;min-height:0;scrollbar-width:thin}
@@ -351,7 +344,7 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
 }
 @media (max-width:580px){
   .accts{grid-template-columns:repeat(3,minmax(0,1fr))}
-  .orb-wrap{width:240px;height:240px}
+  .orb-wrap{width:300px;height:300px}
   .total .big{font-size:64px}.total .cap{text-align:left}
   .layers{grid-template-columns:1fr}
   .act .side{grid-column:2;justify-content:flex-start}
@@ -369,20 +362,141 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
 .total .ring .big sup{font-size:.45em;vertical-align:baseline;align-self:center;margin:-.9em 0 0 1px}
 .tot-r{display:flex;flex-direction:column;gap:12px;min-width:0}
 .total .tot-r .cap{font-size:24px;text-align:left;max-width:none}
+
+/* ---------- glass pass: the page takes its look from the orb ---------- */
+:root{--bg:#FFFFFF;--ink:#17152B;--muted:#6C6A80;--faint:#A9A7BC;--line:#E7E5F1;--soft:#F0EEF8;
+  --a1:#7C74DE;--a2:#E39AC2;--a3:#D9D2FF;--ok:#2E9E7E;
+  --glass:rgba(255,255,255,.58);--glass-b:rgba(255,255,255,.8);--hl:rgba(255,255,255,.75);
+  --shadow:0 1px 1px rgba(30,20,90,.03),0 18px 48px -22px rgba(100,90,200,.32)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#0B0A14;--surface:#16142A;--ink:#EEECF8;--muted:#A3A0BC;--faint:#5E5B78;--line:#24213A;--soft:#1B1930;
+  --a1:#9E97FF;--a2:#F0A8CF;--a3:#2B2552;--ok:#5ED3AE;--glass:rgba(28,25,52,.55);--glass-b:rgba(255,255,255,.08);--hl:rgba(255,255,255,.06);
+  --shadow:0 1px 1px rgba(0,0,0,.3),0 18px 48px -22px rgba(0,0,0,.8)}}
+:root[data-theme="dark"]{--bg:#0B0A14;--surface:#16142A;--ink:#EEECF8;--muted:#A3A0BC;--faint:#5E5B78;--line:#24213A;--soft:#1B1930;
+  --a1:#9E97FF;--a2:#F0A8CF;--a3:#2B2552;--ok:#5ED3AE;--glass:rgba(28,25,52,.55);--glass-b:rgba(255,255,255,.08);--hl:rgba(255,255,255,.06);
+  --shadow:0 1px 1px rgba(0,0,0,.3),0 18px 48px -22px rgba(0,0,0,.8)}
+.card,.ask-bar,.composer,.tabs{background:var(--glass);border:1px solid var(--glass-b);box-shadow:var(--shadow),inset 0 1px 0 var(--hl);
+  backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5)}
+.card{border-radius:24px}
+.send,.go,.do,.me,.chip[aria-pressed="true"]{box-shadow:0 10px 26px -12px color-mix(in srgb,var(--a1) 80%,transparent)}
+.acct{background:color-mix(in srgb,var(--glass) 60%,transparent);border-color:color-mix(in srgb,var(--a1) 25%,transparent)}
+.acct.on{background:var(--glass);border-color:var(--glass-b);box-shadow:var(--shadow),inset 0 1px 0 var(--hl)}
+.acct.on .ic{background:linear-gradient(135deg,var(--a1),var(--a2));color:#fff}
+.whydo{background:color-mix(in srgb,var(--a3) 45%,transparent)}
+.chip{background:color-mix(in srgb,var(--glass) 80%,transparent)}
+/* research board: one fact per row, readable */
+.box{padding:22px 24px}
+.box h3{font-family:var(--f);font-size:15px;font-weight:600;letter-spacing:-.01em;text-transform:none;color:var(--ink);margin:0 0 10px;align-items:center}
+.box h3 span{font-family:var(--fm);font-size:11px;font-weight:500;color:var(--a1);background:color-mix(in srgb,var(--a1) 10%,transparent);border-radius:999px;padding:1px 8px}
+.box h3 span:empty{display:none}
+.fact{display:grid;grid-template-columns:minmax(0,1fr);gap:0;padding:14px 0}
+.fact.kv{grid-template-columns:96px minmax(0,1fr);gap:16px}
+.fact .k{font-size:13px;color:var(--muted);padding-top:2px}
+.fact .v{display:flex;flex-direction:column;gap:4px;min-width:0}
+.fact .claim{font-size:15px;line-height:1.5;color:var(--ink);font-weight:450}
+.fact .src{font-family:var(--fm);font-size:11px;color:var(--faint);padding:0;white-space:normal}
+.facts .fact:not(.kv) .claim{padding-left:16px;position:relative}
+.facts .fact:not(.kv) .claim::before{content:"";position:absolute;left:0;top:.6em;width:6px;height:6px;border-radius:50%;background:linear-gradient(135deg,var(--a1),var(--a2))}
+.facts .fact:not(.kv) .src{padding-left:16px}
+.persona .nm{font-weight:400}
+.avatar{background:radial-gradient(circle at 30% 30%,var(--a2),var(--a1) 75%)}
+
+/* timeline for Right now / Precedents */
+.facts.tl{position:relative;padding-left:4px}
+.facts.tl::before{content:"";position:absolute;left:8px;top:18px;bottom:18px;width:1.5px;border-radius:1px;background:linear-gradient(var(--a1),color-mix(in srgb,var(--a2) 60%,transparent))}
+.facts.tl:has(.wait-txt)::before{display:none}
+.facts.tl .fact{border-top:0;padding:10px 0 10px 28px;position:relative}
+.facts.tl .fact .claim{padding-left:0}
+.facts.tl .fact .claim::before{display:none}
+.facts.tl .fact .src{padding-left:0}
+.facts.tl .fact::before{content:"";position:absolute;left:0;top:15px;width:11px;height:11px;border-radius:50%;background:var(--bg);border:2px solid var(--a1);box-sizing:border-box}
+.facts.tl .fact.soon::before{background:linear-gradient(135deg,var(--a1),var(--a2));border-color:transparent;box-shadow:0 0 0 4px color-mix(in srgb,var(--a1) 18%,transparent);animation:ping 1.8s infinite}
+.when{font-family:var(--fm);font-size:11px;font-weight:500;letter-spacing:.04em;color:var(--a1);text-transform:uppercase}
+.fact.soon .when{color:var(--a2)}
+
+/* niche details */
+.box h3 em{font-style:normal;font-weight:400;font-size:12.5px;color:var(--faint);margin:0 auto 0 8px}
+.nbox{position:relative}
+.nbox::before{content:"";position:absolute;inset:0;border-radius:inherit;padding:1px;pointer-events:none;
+  background:linear-gradient(135deg,color-mix(in srgb,var(--a1) 70%,transparent),transparent 38%,transparent 62%,color-mix(in srgb,var(--a2) 65%,transparent));
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.fact .claim b{font-weight:600}
+.fact.nk{grid-template-columns:minmax(0,1fr);padding:14px 0}
+.fact.nk .tag{align-self:flex-start;font-family:var(--fm);font-size:10.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--a1);background:color-mix(in srgb,var(--a1) 11%,transparent);border-radius:999px;padding:2px 9px;margin-bottom:6px}
+.fact.nk .use{display:flex;gap:10px;align-items:baseline;margin-top:8px;padding:9px 12px;border-radius:12px;background:color-mix(in srgb,var(--a2) 11%,transparent);font-size:13.5px;line-height:1.45;color:var(--ink)}
+.fact.nk .use b{flex:none;font-family:var(--fm);font-size:10.5px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:color-mix(in srgb,var(--a2) 55%,var(--ink))}
+.fact.nk .meta{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:7px;font-family:var(--fm);font-size:11px;color:var(--faint)}
+.fact.nk .meta .src{padding:0}
+.fact.nk .meta .depth::before{content:"↳ "}
+.facts .fact.nk .claim{padding-left:0}
+.facts .fact.nk .claim::before{display:none}
+.facts .fact.nk .src{padding-left:0}
+
+/* living background */
+body.s-run body.s-run 
+/* ---------- motion pass: the page moves and changes color with the orb ---------- */
+:root{--p1:#a99bff;--p2:#f3a6cf;--p3:#8fd0ff;--t1:#5b4fd6;--t2:#c2468a;--t3:#2c7fc4}
+@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes angspin{to{--ang:360deg}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes textflow{to{background-position:200% 0}}
+@keyframes sheen{0%,55%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
+@keyframes pop{0%{transform:scale(.9)}60%{transform:scale(1.06)}100%{transform:none}}
+@keyframes shimmer{from{background-position:150% 0}to{background-position:-50% 0}}
+@keyframes glowpulse{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:.8;transform:scale(1.05)}}
+@keyframes gobreathe{0%,100%{box-shadow:0 12px 30px -12px var(--p2)}50%{box-shadow:0 18px 50px -8px var(--p1)}}
+@keyframes nkflash{from{background:color-mix(in srgb,var(--p1) 24%,transparent)}to{background:transparent}}
+@keyframes dotsdrift{to{background-position:28px 56px}}
+/* background, round two */
+body.working body.s-run /* header: the logo starts over */
+.top{position:relative;z-index:5}
+button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(--ink);font:inherit;font-weight:600;font-size:15px;letter-spacing:-.01em}
+.brand svg{animation:spin 18s linear infinite}
+.brand:hover svg{animation-duration:2s}
+.brand::after{content:"Start over";font-weight:400;font-size:12.5px;color:var(--muted);opacity:0;transform:translateX(-6px);transition:opacity .25s,transform .25s}
+.brand:hover::after,.brand:focus-visible::after{opacity:1;transform:none}
+/* type that takes the orb's colors */
+.kicker{font-size:12.5px;font-weight:600;letter-spacing:.16em;color:var(--t1);background:linear-gradient(90deg,var(--t1),var(--t2),var(--t3),var(--t1));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:textflow 10s linear infinite}
+.hello b{font-weight:600;color:var(--t1);background:linear-gradient(100deg,var(--t1),var(--t2),var(--t3),var(--t1));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:textflow 7s linear infinite}
+/* the input glows and its border runs */
+.ask{position:relative}
+.ask::before{display:none;content:"";position:absolute;left:6%;right:6%;top:10px;height:60px;border-radius:40px;z-index:-1;pointer-events:none;background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3));filter:blur(30px);animation:glowpulse 4.2s ease-in-out infinite}
+.ask-bar{position:relative}
+.acct.on::before,.dcard::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1.5px;pointer-events:none;background:conic-gradient(from var(--ang),var(--p1),var(--p2),var(--p3),var(--p1));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:angspin 5s linear infinite}
+.send,.go{position:relative;overflow:hidden;isolation:isolate}
+.send::before,.go::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.32) 50%,transparent 65%);transform:translateX(-130%);animation:sheen 3.6s ease-in-out infinite}
+.go{animation:gobreathe 4.2s ease-in-out infinite}
+/* accounts light up */
+.acct:hover{transform:translateY(-3px);box-shadow:var(--shadow),0 16px 34px -20px var(--p1)}
+.acct.on::before{animation-duration:4s}
+.acct.on .ic{background:linear-gradient(135deg,var(--p1),var(--p2));box-shadow:0 6px 18px -6px var(--p1)}
+.acct.pop{animation:pop .5s cubic-bezier(.3,1.6,.5,1)}
+.pips i{position:relative;overflow:hidden}
+.pips i.lit,.pips i.lit:nth-child(n+5){background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3))}
+.pips i.lit::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);transform:translateX(-100%);animation:sheen 2.6s ease-in-out infinite}
+/* research: rows shimmer while running, cards lift, new niche details flash */
+.ln.running{background:linear-gradient(90deg,transparent 20%,color-mix(in srgb,var(--p1) 24%,transparent) 50%,transparent 80%);background-size:250% 100%;animation:shimmer 1.8s linear infinite;border-radius:8px}
+.ln.done .ico{animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.box{transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s}
+.box:hover{transform:translateY(-2px);box-shadow:var(--shadow),0 24px 50px -30px var(--p2)}
+.nbox::before{padding:1.5px;background:conic-gradient(from var(--ang),var(--p1),transparent 22%,var(--p2) 50%,transparent 72%,var(--p1));animation:angspin 6s linear infinite}
+.fact.nk{border-top:0;border-radius:14px;margin:2px -10px;padding:12px 10px;animation:rise .45s cubic-bezier(.2,.8,.2,1),nkflash 2s ease-out}
+.live.on{box-shadow:var(--shadow),0 0 0 1px color-mix(in srgb,var(--p1) 45%,transparent),0 18px 40px -24px var(--p1)}
+.me{background:linear-gradient(135deg,var(--ink),color-mix(in srgb,var(--ink) 72%,var(--t1)))}
+/* the action deck glows */
+.dcard{box-shadow:var(--shadow),0 30px 70px -36px var(--p2)}
+.dcard::before{inset:0;background:conic-gradient(from var(--ang),var(--p1),transparent 28%,var(--p2) 52%,transparent 76%,var(--p1))}
+.pbar .trk i{background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3))}
+/* the input always shows its lavender border and soft ring, not only while typing */
+.ask-bar,.ask-bar:focus-within{border-color:color-mix(in srgb,var(--a1) 35%,var(--line));box-shadow:0 0 0 5px color-mix(in srgb,var(--a1) 9%,transparent),var(--shadow)}
 </style>
 </head>
 <body>
 
 
-<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+
 
 <header class="top">
-  <div class="brand"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.6 2.2"/><circle cx="9" cy="9" r="2.6" fill="currentColor"/></svg>Meetble</div>
-  <div class="top-r">
-    <span class="sample" id="modeTag">CONNECTING</span>
-    <button class="tbtn" id="evBtn" type="button" aria-expanded="false">Events</button>
-    <button class="tbtn" id="resetBtn" type="button">Restart</button>
-  </div>
+  <button class="brand" id="homeBtn" type="button" title="Start over" aria-label="Meetble, start over"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.6 2.2"/><circle cx="9" cy="9" r="2.6" fill="currentColor"/></svg>Meetble</button>
 </header>
 
 <main id="intro">
@@ -409,7 +523,7 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
       <div class="pips" id="pips"></div>
       <span class="tracks" id="depthTracks"></span>
     </div>
-    <div class="details" id="details">
+    <div class="details" id="details" hidden>
       <input id="dHint" placeholder="Who they are, to tell same-name people apart (e.g. YC partner)" aria-label="Hint">
       <input id="dX" placeholder="X handle (optional)" aria-label="X handle">
       <input id="dEvent" placeholder="Event URL you are both at (optional)" aria-label="Event URL">
@@ -461,14 +575,15 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
         <div class="persona"><div class="avatar" id="avatar">BJ</div><div><div class="nm" id="tName">Boris Jabes</div><div class="rl" id="role">Identifying…</div></div></div>
         <div class="facts" id="f-persona"></div>
       </div>
-      <div class="box card"><h3>Right now <span id="cntNow"></span></h3><div class="facts" id="f-now"><div class="wait-txt">Waiting for research…</div></div></div>
-      <div class="box card"><h3>Precedents · how others reached him <span id="cntPrec"></span></h3><div class="facts" id="f-prec"><div class="wait-txt">Waiting for research…</div></div></div>
+      <div class="box card nbox"><h3>Niche details <em>only a deep dig finds these</em><span id="cntNiche"></span></h3><div class="facts" id="f-niche"><div class="wait-txt">Waiting for research…</div></div></div>
+      <div class="box card"><h3>Right now <span id="cntNow"></span></h3><div class="facts tl" id="f-now"><div class="wait-txt">Waiting for research…</div></div></div>
+      <div class="box card"><h3>Precedents · how others reached him <span id="cntPrec"></span></h3><div class="facts tl" id="f-prec"><div class="wait-txt">Waiting for research…</div></div></div>
     </div>
 
     <div class="pane" id="panePlan" hidden>
       <div class="total card">
         <div class="ring">
-          <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--a1)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient></defs>
+          <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--p1)"/><stop offset="1" style="stop-color:var(--p2)"/></linearGradient></defs>
             <circle class="rt" cx="50" cy="50" r="44"/><circle class="rv" id="ringV" cx="50" cy="50" r="44"/></svg>
           <div class="big" id="big">–</div>
         </div>
@@ -493,13 +608,14 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 const EXAMPLE = 'Meet Boris Jabes before 22:45 tonight, in person for 5 minutes. Budget ¥30,000.';
 
 /* ---------- the agent orb: port of Grace's Lock-in Orb (LOCKIN_ORB_VISUAL_HANDOFF.md) ---------- */
-const ORB_PALETTES = [ // Monet palettes from 《光與壑》, calm ones only; the orb drifts through them
-  ['#B0C4DE','#D8BFD8','#6495ED','#E6E6FA','#778899','#F8F8FF'], // spring night
-  ['#B0C4DE','#D8BFD8','#E6E6FA','#C0C0C0','#F0F8FF','#ADD8E6'], // summer sunset
-  ['#FFDAB9','#EE82EE','#FFB6C1','#F0E68C','#87CEFA','#FFF0F5'], // spring sunset
-  ['#FFFFFF','#F8F8FF','#E0FFFF','#D8BFD8','#B0E0E6','#E6E6FA'], // winter noon
-  ['#2F2F4F','#3C3C5C','#5D5D7D','#778899','#8E88A6','#B0C4DE'], // winter night
-  ['#F2D7EE','#FFFACD','#E0FFFF','#FFB7C5','#98FB98','#E6E6FA'], // spring morning
+const ORB_PALETTES = [ // Monet palettes from 《光與壑》, ordered around the color wheel so the page keeps changing color
+  ['#B0E0E6','#ADD8E6','#87CEFA','#F0F8FF','#FFFFFF','#F5F5F5'], // spring noon: sky
+  ['#B0C4DE','#D8BFD8','#6495ED','#E6E6FA','#778899','#F8F8FF'], // spring night: blue
+  ['#B0C4DE','#778899','#C0C0C0','#D8BFD8','#87CEFA','#FFB6C1'], // winter sunset: violet
+  ['#FFDAB9','#EE82EE','#FFB6C1','#F0E68C','#87CEFA','#FFF0F5'], // spring sunset: pink
+  ['#AFEEEE','#8FBC8F','#FFFACD','#FFB6C1','#D8BFD8','#E9967A'], // summer noon: peach
+  ['#F2D7EE','#FFFACD','#E0FFFF','#FFB7C5','#98FB98','#E6E6FA'], // spring morning: butter
+  ['#E0FFFF','#FFDEAD','#F0FFF0','#FFC0CB','#00BFFF','#FAFAD2'], // summer morning: mint
 ];
 const TAU = Math.PI * 2, WHITE = [255,255,255], INK = [12,14,34];
 const noise3 = (() => {
@@ -550,21 +666,47 @@ function harmonize(cols){ // pull hues toward the palette's main hue, keep satur
 const HARM = ORB_PALETTES.map(p => harmonize(p.map(hexc)));
 const layer = () => { const c = document.createElement('canvas'); return [c, c.getContext('2d')]; };
 
+// One color clock for both orbs and the background: colors flow continuously from palette to palette.
+const PAL = {p:0, last:performance.now(), stamp:-1, e:0, kick:0, cur:HARM[0].map(c => c.slice()), nxt:HARM[1].map(c => c.slice()), glow:[200,200,240]};
+function palTick(now){
+  if(now === PAL.stamp) return PAL;
+  const dt = Math.min(.1, Math.max(0, (now - PAL.last)/1000)); PAL.stamp = PAL.last = now;
+  PAL.kick = Math.max(0, PAL.kick - dt);
+  PAL.p = (PAL.p + dt*(RM ? .01 : .05 + .05*PAL.e)) % HARM.length; // about 20 s per palette: calm, not flashy
+  const i = Math.floor(PAL.p), f = smooth(0, 1, PAL.p - i), A = HARM[i], B = HARM[(i + 1) % HARM.length];
+  const C = HARM[(i + 2) % HARM.length];
+  for(let k = 0; k < 6; k++) for(let j = 0; j < 3; j++){ PAL.cur[k][j] = A[k][j] + (B[k][j] - A[k][j])*f; PAL.nxt[k][j] = B[k][j] + (C[k][j] - B[k][j])*f; }
+  let r = 0, g = 0, b = 0, ws = 0;
+  for(const c of PAL.cur){ const w = (Math.max(...c) - Math.min(...c) + 25)**2; r += c[0]*w; g += c[1]*w; b += c[2]*w; ws += w; }
+  PAL.glow = [r/ws, g/ws, b/ws];
+  return PAL;
+}
+// 2×2 matrices [m11, m12, m21, m22]: a stretch along angle a, and a product
+const stretch = (a, sx, sy) => { const c = Math.cos(a), s = Math.sin(a), k = c*s*(sx - sy); return [c*c*sx + s*s*sy, k, k, s*s*sx + c*c*sy]; };
+const mat = (A, B) => [A[0]*B[0] + A[1]*B[2], A[0]*B[1] + A[1]*B[3], A[2]*B[0] + A[3]*B[2], A[2]*B[1] + A[3]*B[3]];
+const tone = (c, ds, l) => { const [h, s] = rgb2hsl(c); return hsl2rgb([h, clamp(s + ds, 0, .9), l]); }; // same hue, chosen strength
+const toHex = c => '#' + c.map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('');
+const vivid = c => { const [h, s, l] = rgb2hsl(c); return hsl2rgb([h, Math.max(s, .5), clamp(l, .58, .72)]); }; // a glow that still shows on a light page
+const MASK = [[0,1],[.5,1],[.66,.93],[.78,.74],[.87,.48],[.94,.22],[1,0]]; // soft edge: no hard rim
+
 class Orb{
-  constructor(canvas, {strands = 520, sparks = 150, rf = .3} = {}){
-    this.c = canvas; this.x = canvas.getContext('2d'); this.ns = strands; this.nk = sparks; this.rf = rf;
-    [this.body, this.bx] = layer(); [this.trail, this.tx] = layer(); [this.bloom, this.gx] = layer();
-    this.mode = 'idle'; this.energy = 0; this.t = 0; this.tw = 0; this.W = 0; this.H = 0;
-    this.cur = HARM[0].map(c => c.slice()); this.tgt = HARM[0];
+  constructor(canvas, {strands = 520, sparks = 150, rf = .27, float = 1} = {}){
+    this.c = canvas; this.x = canvas.getContext('2d'); this.ns = strands; this.nk = sparks; this.rf = rf; this.fl = float;
+    [this.body, this.bx] = layer(); [this.trail, this.tx] = layer(); [this.bloom, this.gx] = layer(); [this.mask, this.mx] = layer(); [this.film, this.fx] = layer();
+    this.mode = 'idle'; this.energy = 0; this.burst = 0; this.t = Math.random()*100; this.tw = 0; this.W = 0; this.H = 0;
+    this.j = [0, 0]; this.jv = [0, 0]; this.lean = [0, 0]; this.lv = [0, 0]; this.kickIn = .6;
     this.last = performance.now(); this.frame = this.frame.bind(this); requestAnimationFrame(this.frame);
   }
   set(mode){ this.mode = mode; }
   colors(){}
-  palette(i){ this.tgt = HARM[i % HARM.length]; }
+  poke(px, py){ // a tap: the bubble jiggles away from the finger and the colors rush ahead
+    const R = this.R || 50, m = Math.hypot(px, py) || 1;
+    this.jv[0] -= px/m*R*4.5; this.jv[1] -= py/m*R*4.5; this.burst = 1; PAL.kick = 1.2;
+  }
   resize(){
     const W = this.c.clientWidth, H = this.c.clientHeight, D = this.D = Math.min(devicePixelRatio || 1, 2);
     this.W = W; this.H = H;
-    for(const c of [this.c, this.body, this.trail]){ c.width = Math.round(W*D); c.height = Math.round(H*D); }
+    for(const c of [this.c, this.body, this.trail, this.mask, this.film]){ c.width = Math.round(W*D); c.height = Math.round(H*D); }
     this.bloom.width = Math.max(1, Math.round(W*D/4)); this.bloom.height = Math.max(1, Math.round(H*D/4)); // quarter res + upscale = soft blur in every browser
     this.R = Math.min(W, H)*this.rf; this.U = this.R/100;
     this.ps = Array.from({length:this.ns}, () => this.spawnP({}, true));
@@ -588,12 +730,12 @@ class Orb{
     const dx = noise3(nx + e, ny, z) - noise3(nx - e, ny, z), dy = noise3(nx, ny + e, z) - noise3(nx, ny - e, z), m = Math.hypot(dx, dy) || 1;
     return [dy/m, -dx/m];
   }
-  stepP(dt){ // light strands into the persistent trail buffer
-    const x = this.tx, k = dt*60, R = this.R, z = .05*this.t, spin = .25 + .5*this.energy, D = this.D;
+  stepP(dt, bright = 1){ // light strands into the persistent trail buffer
+    const x = this.tx, k = dt*60, R = this.R, z = .08*this.t, spin = .38 + .5*this.energy, D = this.D, pal = PAL.cur;
     x.setTransform(1,0,0,1,0,0); x.globalCompositeOperation = 'destination-out';
     x.fillStyle = `rgba(0,0,0,${1 - (1 - .025)**k})`; x.fillRect(0, 0, this.trail.width, this.trail.height);
     x.setTransform(D,0,0,D,this.W*D/2,this.H*D/2); x.globalCompositeOperation = 'lighter'; x.lineCap = 'butt';
-    const relax = 1 - Math.exp(-2.6*dt), boost = 1 + 1.2*this.energy;
+    const relax = 1 - Math.exp(-2.6*dt), boost = 1.45 + 1.2*this.energy;
     for(const p of this.ps){
       const sp = p.sp*boost, [fx, fy] = this.flow(p.x, p.y, z), r = Math.hypot(p.x, p.y) || 1, ux = p.x/r, uy = p.y/r;
       let tx = fx*sp - uy*spin*sp*(r/R), ty = fy*sp + ux*spin*sp*(r/R);
@@ -601,98 +743,176 @@ class Orb{
       p.vx += (tx - p.vx)*relax; p.vy += (ty - p.vy)*relax;
       const ox = p.x, oy = p.y; p.x += p.vx*k; p.y += p.vy*k; p.age += k;
       if(p.age >= p.life || Math.hypot(p.x, p.y) > 1.15*R){ this.spawnP(p); continue; }
-      const life = p.age/p.life, al = p.a*Math.sin(Math.PI*life)**2*(1 - smooth(.45*R, .95*R, r))*(.35 + .65*(.5 + .5*Math.sin(this.t*p.fr + p.ph)))*(1 + .5*this.energy);
+      const life = p.age/p.life, al = p.a*Math.sin(Math.PI*life)**2*(1 - smooth(.45*R, .95*R, r))*(.35 + .65*(.5 + .5*Math.sin(this.t*p.fr + p.ph)))*(1 + .5*this.energy)*bright;
       if(al < .003) continue;
-      x.strokeStyle = rgba(mixc(this.cur[p.ci], WHITE, .45), al); x.lineWidth = p.w;
+      x.strokeStyle = rgba(mixc(pal[p.ci], WHITE, .45), al); x.lineWidth = p.w;
       x.beginPath(); x.moveTo(ox, oy); x.lineTo(p.x, p.y); x.stroke();
     }
   }
   frame(now){
     requestAnimationFrame(this.frame);
-    const dt = Math.min(.05, (now - this.last)/1000); this.last = now;
+    const dt = Math.min(.05, Math.max(0, (now - this.last)/1000)); this.last = now;
     if(!this.c.offsetParent) return;
     if(this.c.clientWidth !== this.W || this.c.clientHeight !== this.H) this.resize();
     if(!this.W) return;
     const eT = {idle:0, busy:.7, wait:0, done:.15}[this.mode] ?? 0;
-    this.energy += (eT - this.energy)*(1 - Math.exp(-3*dt));
-    this.t += dt; this.tw += (.13 + .6*this.energy)*dt;
-    const ease = 1 - Math.exp(-1.25*dt);
-    this.cur.forEach((c, i) => c.forEach((v, j) => c[j] = v + (this.tgt[i][j] - v)*ease));
-    let gr = 0, gg = 0, gb = 0, ws = 0;
-    for(const c of this.cur){ const w = (Math.max(...c) - Math.min(...c) + 25)**2; gr += c[0]*w; gg += c[1]*w; gb += c[2]*w; ws += w; }
-    const glow = [gr/ws, gg/ws, gb/ws], R = this.R, U = this.U, D = this.D, t = this.t, W = this.W, H = this.H, pal = this.cur;
-    this.stepP(dt);
+    this.burst = Math.max(0, this.burst - dt*1.6);
+    this.energy += (Math.max(eT, this.burst) - this.energy)*(1 - Math.exp(-3*dt));
+    PAL.e = Math.max(PAL.e - dt*.5, this.energy);
+    const P = palTick(now), pal = P.cur, glow = P.glow;
+    this.t += dt; this.tw += (.3 + .6*this.energy)*dt;
+    const R = this.R, U = this.U, D = this.D, t = this.t, W = this.W, H = this.H, fl = RM ? 0 : this.fl;
+    const b0 = .5 + .5*Math.sin(t*TAU/4.2), br = RM ? .6 : b0*b0*(3 - 2*b0); // breathing: one slow in-and-out every 4.2 s
+    // bubble motion: random jiggles on a spring, a slow float, a lean toward the cursor
+    if(!RM){
+      this.kickIn -= dt;
+      for(let i = 0; i < 2; i++){
+        this.jv[i] += (-140*this.j[i] - 7*this.jv[i])*dt; this.j[i] += this.jv[i]*dt;
+        this.lv[i] += (this.lean[i] - this.lv[i])*(1 - Math.exp(-5*dt));
+      }
+    }
+    const ox = (noise3(t*.12, 3.1, .5)*.07*R + this.j[0])*fl;
+    const oy = (Math.sin(t*.7)*.03*R + noise3(t*.11, 7.7, .5)*.05*R + this.j[1])*fl;
+    const sA = clamp(Math.hypot(this.jv[0], this.jv[1])/R*.05, 0, .16)*fl, aA = Math.atan2(this.jv[1], this.jv[0]); // stretch along the jiggle
+    const sW = .012*Math.sin(1.4*t)*fl, sB = 1 + .035*(2*br - 1) + .012*this.energy*Math.sin(4.6*t);
+    const T = mat(stretch(aA, 1 + sA, 1 - sA*.8), stretch(.5*t, 1 + sW, 1 - sW)).map(v => v*sB);
+    this.stepP(dt, .7 + .9*br + .4*this.energy);
     // bloom
     const g = this.gx; g.setTransform(1,0,0,1,0,0); g.clearRect(0, 0, this.bloom.width, this.bloom.height); g.drawImage(this.trail, 0, 0, this.bloom.width, this.bloom.height);
-    // body
-    const b = this.bx, sB = 1 + .022*Math.sin(1.2*t) + .012*this.energy*Math.sin(4.6*t);
-    b.setTransform(1,0,0,1,0,0); b.globalCompositeOperation = 'source-over'; b.clearRect(0, 0, this.body.width, this.body.height);
-    b.setTransform(D*sB,0,0,D*sB,W*D/2,H*D/2);
-    let gr2 = b.createRadialGradient(-.15*R, -.25*R, 0, 0, 0, R);
-    gr2.addColorStop(0, rgba(mixc(glow, WHITE, .35), .86)); gr2.addColorStop(.6, rgba(mixc(glow, INK, .24), .8)); gr2.addColorStop(1, rgba(mixc(glow, INK, .42), .74));
-    b.fillStyle = gr2; b.fillRect(-R, -R, 2*R, 2*R);
+    // body, in orb space; E reaches past R because the wobbly mask does
+    const b = this.bx, E = 1.25*R, home = () => b.setTransform(D,0,0,D,W*D/2,H*D/2);
+    b.setTransform(1,0,0,1,0,0); b.globalCompositeOperation = 'source-over'; b.clearRect(0, 0, this.body.width, this.body.height); home();
+    let gr = b.createRadialGradient(-.15*R, -.25*R, 0, 0, 0, R);
+    gr.addColorStop(0, rgba(mixc(glow, WHITE, .35), .86)); gr.addColorStop(.6, rgba(mixc(glow, INK, .24), .8)); gr.addColorStop(1, rgba(mixc(glow, INK, .42), .74));
+    b.fillStyle = gr; b.fillRect(-E, -E, 2*E, 2*E);
     b.globalCompositeOperation = 'screen';
     for(let i = 0; i < 6; i++){
       const cx = noise3(i*3.7, .5, this.tw)*1.5*R, cy = noise3(i*3.7, 9.1, this.tw)*1.5*R, rr = R*(.7 + .3*noise3(i*3.7, 17.3, 1.3*this.tw));
       const cg = b.createRadialGradient(cx, cy, 0, cx, cy, Math.max(1, rr));
       cg.addColorStop(0, rgba(pal[i], .72)); cg.addColorStop(.4, rgba(pal[i], .4)); cg.addColorStop(.75, rgba(pal[i], .1)); cg.addColorStop(1, rgba(pal[i], 0));
-      b.fillStyle = cg; b.fillRect(-R, -R, 2*R, 2*R);
+      b.fillStyle = cg; b.fillRect(-E, -E, 2*E, 2*E);
     }
     const sg = b.createRadialGradient(-.3*R, -.42*R, 0, -.3*R, -.42*R, .7*R);
     sg.addColorStop(0, rgba(WHITE, .2)); sg.addColorStop(.45, rgba(WHITE, .09)); sg.addColorStop(1, rgba(WHITE, 0));
-    b.fillStyle = sg; b.fillRect(-R, -R, 2*R, 2*R);
+    b.fillStyle = sg; b.fillRect(-E, -E, 2*E, 2*E);
+    // soap-film shimmer near the rim (conic gradient where the browser has it)
+    if(b.createConicGradient){
+      const f = this.fx; f.setTransform(1,0,0,1,0,0); f.globalCompositeOperation = 'source-over'; f.clearRect(0, 0, this.film.width, this.film.height);
+      f.setTransform(D,0,0,D,W*D/2,H*D/2);
+      const cg = f.createConicGradient(t*.5, 0, 0);
+      for(let k = 0; k <= 6; k++) cg.addColorStop(k/6, rgba(mixc(pal[k % 6], WHITE, .2), 1));
+      f.fillStyle = cg; f.fillRect(-E, -E, 2*E, 2*E);
+      f.globalCompositeOperation = 'destination-in';
+      const fr = f.createRadialGradient(0, 0, 0, 0, 0, E);
+      [[0,0],[.36,0],[.56,.8],[.66,1],[.76,.6],[.86,0]].forEach(([o, a]) => fr.addColorStop(o, `rgba(0,0,0,${a})`));
+      f.fillStyle = fr; f.fillRect(-E, -E, 2*E, 2*E);
+      b.setTransform(1,0,0,1,0,0); b.globalAlpha = .26 + .12*this.energy; b.drawImage(this.film, 0, 0); b.globalAlpha = 1; home();
+    }
+    // light running inside: comet ribbons on tilted orbits, brighter on each in-breath
+    b.globalCompositeOperation = 'lighter'; b.lineCap = 'round';
+    for(let i = 0; i < 3; i++){
+      const dir = i % 2 ? -1 : 1, rr = R*(.3 + .17*i)*(1 + .06*Math.sin(t*.8 + i)), sw = 1.25 + .5*Math.sin(t*.6 + i*1.3);
+      const a0 = dir*t*(.85 + .3*i)*(1 + 1.4*this.energy) + i*2.1, col = tone(pal[(i*2 + 1) % 6], .35, .74), k = (.35 + .65*br)*(1 + .7*this.energy);
+      b.save(); b.rotate(i*1.05 + .25*Math.sin(t*.3 + i)); b.scale(1, .42 + .14*Math.sin(t*.5 + i*2));
+      for(const [w, al] of [[.26, .06], [.12, .16], [.045, .62]]){
+        const A = rgba(col, al*k); let st = A;
+        if(b.createConicGradient){ // a comet: bright head where it is going, tail fading behind
+          const cg = b.createConicGradient(a0, 0, 0), f = sw/TAU, Z = rgba(col, 0);
+          if(dir > 0){ cg.addColorStop(0, Z); cg.addColorStop(f*.8, A); cg.addColorStop(f, A); cg.addColorStop(f + .002, Z); }
+          else { cg.addColorStop(0, A); cg.addColorStop(f*.2, A); cg.addColorStop(f, Z); }
+          cg.addColorStop(1, Z); st = cg;
+        }
+        b.strokeStyle = st; b.lineWidth = w*R; b.beginPath(); b.arc(0, 0, rr, a0, a0 + sw); b.stroke();
+      }
+      const ha = dir > 0 ? a0 + sw : a0, hx = Math.cos(ha)*rr, hy = Math.sin(ha)*rr, hg = b.createRadialGradient(hx, hy, 0, hx, hy, .09*R); // the comet's bright head
+      hg.addColorStop(0, rgba(WHITE, .85*k)); hg.addColorStop(.35, rgba(col, .5*k)); hg.addColorStop(1, rgba(col, 0));
+      b.fillStyle = hg; b.fillRect(hx - .09*R, hy - .09*R, .18*R, .18*R);
+      b.restore();
+    }
+    // a core of light that swells and fades with the breath
+    b.globalCompositeOperation = 'screen';
+    const cr = R*(.42 + .24*br), cc = tone(glow, .3, .7), core = b.createRadialGradient(-.06*R, -.1*R, 0, -.06*R, -.1*R, cr);
+    core.addColorStop(0, rgba(cc, .26 + .4*br)); core.addColorStop(.5, rgba(cc, .1 + .18*br)); core.addColorStop(1, rgba(cc, 0));
+    b.fillStyle = core; b.fillRect(-E, -E, 2*E, 2*E);
+    b.globalCompositeOperation = 'lighter';
+    const hot = b.createRadialGradient(-.06*R, -.1*R, 0, -.06*R, -.1*R, R*(.14 + .08*br));
+    hot.addColorStop(0, rgba(WHITE, .12 + .3*br)); hot.addColorStop(1, rgba(WHITE, 0));
+    b.fillStyle = hot; b.fillRect(-E, -E, 2*E, 2*E);
     b.globalCompositeOperation = 'lighter';
     b.globalAlpha = .95; b.drawImage(this.bloom, -W/2, -H/2, W, H);
     b.globalAlpha = .85; b.drawImage(this.trail, -W/2, -H/2, W, H);
     b.globalAlpha = 1;
     // sparkles
     for(const s of this.ks){
-      const [fx, fy] = this.flow(s.x, s.y, .05*t + 7.3), r = Math.hypot(s.x, s.y) || 1;
-      s.x += (fx*s.sp - s.y/R*6*U - (r > .85*R ? s.x/r*20*U : 0))*dt; s.y += (fy*s.sp + s.x/R*6*U - (r > .85*R ? s.y/r*20*U : 0))*dt; s.age += dt;
+      const [fx, fy] = this.flow(s.x, s.y, .08*t + 7.3), r = Math.hypot(s.x, s.y) || 1, sp = s.sp*1.4;
+      s.x += (fx*sp - s.y/R*8*U - (r > .85*R ? s.x/r*20*U : 0))*dt; s.y += (fy*sp + s.x/R*8*U - (r > .85*R ? s.y/r*20*U : 0))*dt; s.age += dt;
       if(s.age >= s.life || r > 1.1*R){ this.spawnK(s); continue; }
       const al = Math.sin(Math.PI*s.age/s.life)**2*(.5 + .5*Math.sin(t*s.fr + s.ph))*(1 - smooth(.5*R, .95*R, r))*.55, col = mixc(pal[s.ci], WHITE, .78);
       if(al < .01) continue;
       b.fillStyle = rgba(col, al*.16); b.beginPath(); b.arc(s.x, s.y, s.r*3, 0, TAU); b.fill();
       b.fillStyle = rgba(col, al); b.beginPath(); b.arc(s.x, s.y, s.r, 0, TAU); b.fill();
     }
-    // soft-edge mask: no hard rim
-    b.globalCompositeOperation = 'destination-in';
-    const m = b.createRadialGradient(0, 0, 0, 0, 0, R);
-    [[0,1],[.5,1],[.66,.93],[.78,.74],[.87,.48],[.94,.22],[1,0]].forEach(([o, a]) => m.addColorStop(o, `rgba(0,0,0,${a})`));
-    b.fillStyle = m; b.fillRect(-W, -H, 2*W, 2*H);
-    b.globalCompositeOperation = 'source-over';
-    // main canvas: two halos, then the body
-    const x = this.x, ga = .28 + .18*this.energy, sBase = 1 + .022*Math.sin(1.2*t);
+    // window reflection, like a soap bubble
+    b.globalCompositeOperation = 'screen';
+    b.save(); b.translate(-.4*R, -.44*R); b.rotate(-.7); b.scale(1, .42);
+    const hg = b.createRadialGradient(0, 0, 0, 0, 0, .28*R); hg.addColorStop(0, rgba(WHITE, .5)); hg.addColorStop(.55, rgba(WHITE, .14)); hg.addColorStop(1, rgba(WHITE, 0));
+    b.fillStyle = hg; b.beginPath(); b.arc(0, 0, .28*R, 0, TAU); b.fill(); b.restore();
+    b.fillStyle = rgba(WHITE, .55); b.beginPath(); b.arc(-.52*R, -.36*R, .028*R, 0, TAU); b.fill();
+    // soft wobbly outline: three drifting soft discs merged (metaball), then cut the body to it
+    const m = this.mx; m.setTransform(1,0,0,1,0,0); m.clearRect(0, 0, this.mask.width, this.mask.height); m.setTransform(D,0,0,D,W*D/2,H*D/2);
+    for(let i = 0; i < 3; i++){
+      const a = t*(.55 + .2*i)*(i % 2 ? -1 : 1) + i*2.1, o = (i ? R*(.06 + .035*Math.sin(t*.9 + i*1.3)) : 0)*fl, rr = R*(i ? .8 + .05*Math.sin(t*1.3 + i*1.7) : .97);
+      const cx = Math.cos(a)*o, cy = Math.sin(a)*o, mg = m.createRadialGradient(cx, cy, 0, cx, cy, rr);
+      MASK.forEach(([s, al]) => mg.addColorStop(s, `rgba(0,0,0,${al*(i ? .75 : 1)})`));
+      m.fillStyle = mg; m.fillRect(cx - rr, cy - rr, 2*rr, 2*rr);
+    }
+    b.setTransform(1,0,0,1,0,0); b.globalCompositeOperation = 'destination-in'; b.drawImage(this.mask, 0, 0); b.globalCompositeOperation = 'source-over';
+    // main canvas: halos, then the body, floating and stretched like jelly
+    const x = this.x, ga = .44 + .4*br + .18*this.energy; // the glow breathes too
     x.setTransform(1,0,0,1,0,0); x.clearRect(0, 0, this.c.width, this.c.height);
-    x.setTransform(D*sBase,0,0,D*sBase,W*D/2,H*D/2);
+    x.setTransform(D*T[0], D*T[2], D*T[1], D*T[3], (W/2 + ox)*D, (H/2 + oy)*D);
     const halo = (cx, cy, rad, col, a) => {
       const h = x.createRadialGradient(cx, cy, 0, cx, cy, rad);
       [[0,1],[.35,.8],[.55,.42],[.75,.14],[1,0]].forEach(([o, k]) => h.addColorStop(o, rgba(col, a*k)));
       x.fillStyle = h; x.fillRect(cx - rad, cy - rad, 2*rad, 2*rad);
     };
-    halo(0, 0, 1.62*R, glow, ga);
-    halo(Math.cos(.23*t)*.16*R, Math.sin(.31*t)*.16*R, 1.4*R, mixc(pal[2], pal[4], .5 + .5*Math.sin(.21*t)), .55*ga);
-    x.setTransform(1,0,0,1,0,0); x.drawImage(this.body, 0, 0);
+    halo(0, 0, 1.62*R*(1 + .08*br), vivid(glow), ga);
+    halo(Math.cos(.23*t)*.16*R, Math.sin(.31*t)*.16*R, 1.4*R, vivid(mixc(pal[2], pal[4], .5 + .5*Math.sin(.21*t))), .55*ga);
+    const au = mixc(vivid(glow), WHITE, .4), ar = x.createRadialGradient(0, 0, R*.7, 0, 0, R*1.36); // a ring of light that swells with each breath
+    ar.addColorStop(0, rgba(au, 0)); ar.addColorStop(.48, rgba(au, .18 + .42*br)); ar.addColorStop(1, rgba(au, 0));
+    x.fillStyle = ar; x.fillRect(-1.4*R, -1.4*R, 2.8*R, 2.8*R);
+    x.drawImage(this.body, -W/2, -H/2, W, H);
   }
 }
-const bigOrb = new Orb($('#bigOrb')), miniOrb = new Orb($('#miniOrb'), {strands:140, sparks:30, rf:.3});
-// drift through the palettes; faster while the agent works
-let orbPal = 0;
-(function cyclePalette(){
-  orbPal = (orbPal + 1) % ORB_PALETTES.length; bigOrb.palette(orbPal); miniOrb.palette(orbPal);
-  setTimeout(cyclePalette, miniOrb.mode === 'busy' ? 4000 : 9000);
+const bigOrb = new Orb($('#bigOrb')), miniOrb = new Orb($('#miniOrb'), {strands:140, sparks:30, float:.6});
+
+/* ---------- page accents follow the orb's colors; the page itself stays plain white ---------- */
+(() => {
+  let varT = -1e9, working = false;
+  const root = document.documentElement, mq = matchMedia('(prefers-color-scheme: dark)');
+  const isDark = () => root.dataset.theme === 'dark' || (root.dataset.theme !== 'light' && mq.matches);
+  function frame(now){
+    requestAnimationFrame(frame);
+    const P = palTick(now), pal = P.cur, dk = isDark();
+    if(now - varT > 80){ varT = now; // the page's accent colors follow the orb
+      const vs = pal.map(c => [rgb2hsl(c)[1], c]).sort((a, b) => b[0] - a[0]);
+      for(let i = 0; i < 3; i++){ root.style.setProperty('--p' + (i + 1), toHex(tone(vs[i][1], .3, dk ? .66 : .7))); root.style.setProperty('--t' + (i + 1), toHex(tone(vs[i][1], .4, dk ? .78 : .46))); }
+    }
+    const busy = PAL.e > .3 && document.body.classList.contains('s-run');
+    if(busy !== working){ working = busy; document.body.classList.toggle('working', busy); }
+  }
+  requestAnimationFrame(frame);
 })();
 
 /* ---------- accounts → tracks ---------- */
 const ACCTS = [
-  {key:'linkedin', ic:'in', nm:'LinkedIn', on:true},
-  {key:'x', ic:'X', nm:'X', on:true},
+  {key:'linkedin', ic:'in', nm:'LinkedIn', on:false},
+  {key:'x', ic:'X', nm:'X', on:false},
   {key:'email', ic:'@', nm:'Email', on:false},
-  {key:'luma', ic:'Lu', nm:'Luma', on:true},
-  {key:'instagram', ic:'IG', nm:'Instagram', on:false},
-  {key:'calendar', ic:'Cal', nm:'Calendar', on:true, plan:true}, // your free time; not a research track
+  {key:'luma', ic:'Lu', nm:'Luma', on:false},
+  {key:'calendar', ic:'Cal', nm:'Calendar', on:false, plan:true}, // your free time; not a research track
 ];
-const NTRACKS = 7;
+const NTRACKS = 6; // web + podcasts need only API keys, plus one per research account
 const LOGIN_URL = {luma:'https://luma.com/signin', linkedin:'https://www.linkedin.com/login', x:'https://x.com/login', instagram:'https://www.instagram.com/accounts/login/'};
 let loginState = null, pendingLogin = false; // live: real sign-in status from your Chrome // web + podcasts need only API keys, plus one per research account
 const isOn = k => ACCTS.find(a => a.key === k)?.on ?? true;
@@ -733,7 +953,7 @@ $('#accts').addEventListener('click', e => {
   const b = e.target.closest('.acct'); if(!b) return;
   const a = ACCTS.find(x => x.key === b.dataset.k);
   if(LIVE && LOGIN_URL[a.key] && !a.on){ pendingLogin = true; window.open(LOGIN_URL[a.key], '_blank'); return; } // you sign in yourself; we never see the password
-  a.on = !a.on; renderAccts();
+  a.on = !a.on; renderAccts(); $(`.acct[data-k="${a.key}"]`).classList.add('pop');
 });
 renderAccts();
 
@@ -752,7 +972,6 @@ function submitAsk(){
   bigOrb.set('busy'); setTimeout(() => bigOrb.set('idle'), 900);
 }
 $('#goBtn').addEventListener('click', () => {
-  if(!LIVE && !QS.has('demo')){ toast('Not connected to a Meetble server yet'); return; } // real runs only; ?demo=1 plays the sample
   document.body.className = 's-run'; scrollTo(0,0); LIVE ? runLive() : run(); });
 
 /* ---------- live mode: served by server.mjs, runs the real pipeline. Opened as a file (or ?demo=1) it plays the sample run. ---------- */
@@ -765,14 +984,14 @@ const q = path => API + path + (TOK ? (path.includes('?') ? '&' : '?') + TOK : '
 (async () => {
   if(QS.has('demo')) { $('#modeNote').textContent = 'Demo mode: sample data, nothing is sent.'; return; }
   const OFF = 'Not connected. Open the URL that start-gmi.sh prints (http://<server IP>:8787/?token=…), or run node server.mjs on this computer and open http://localhost:8787.';
-  if(!location.protocol.startsWith('http')) { $('#modeNote').textContent = OFF; $('#modeTag').textContent = 'OFFLINE'; return; }
+  if(!location.protocol.startsWith('http')) { $('#modeNote').textContent = OFF; return; }
   try{
-    const h = await (await fetch(q('/api/health'))).json(); LIVE = true; $('#modeTag').textContent = 'LIVE';
+    const h = await (await fetch(q('/api/health'))).json(); LIVE = true;
     const miss = [!h.has_dist && 'dist/ (run npm run build)', !h.has_env && '.env', !h.has_profile && 'user_profile.json'].filter(Boolean);
     $('#modeNote').textContent = 'Live mode: runs the real research on this computer.' + (miss.length ? ' Missing: ' + miss.join(', ') : '');
     $('#dReuse').disabled = !h.has_research;
     $('#recheckBtn').hidden = false; refreshLogins(false);
-  }catch{ $('#modeNote').textContent = OFF; $('#modeTag').textContent = 'OFFLINE'; }
+  }catch{ $('#modeNote').textContent = OFF; }
 })();
 function onMeta(ev){
   if(ev.name){ $('#tName').textContent = ev.name; $('#avatar').textContent = ev.name.split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase(); }
@@ -792,7 +1011,7 @@ async function runLive(){
   es.onmessage = m => {
     if(my !== runId){ es.close(); return; }
     const ev = JSON.parse(m.data);
-    if(ev.type === 'end'){ es.close(); liveStop(`Done · ${live.n} steps`);
+    if(ev.type === 'end'){ es.close(); liveStop(`Done · ${live.n} steps`); emptyNiche();
       setState(actions.length ? 'Done. Swipe through your routes.' : 'Stopped. See the checklist for why.', 'done'); return; }
     if(ev.type === 'meta') return onMeta(ev);
     if(ev.type === 'actions' && ev.summary) $('#planSum').textContent = ev.summary;
@@ -808,7 +1027,6 @@ function emit(ev){
   $('#evlog').scrollTop = 1e6;
   ({step:onStep, finding:onFinding, actions:onActions, action_status:onStatus, browse:onBrowse})[ev.type]?.(ev);
 }
-$('#evBtn').addEventListener('click', e => { const hid = $('#evlog').hidden = !$('#evlog').hidden; e.target.setAttribute('aria-expanded', !hid); });
 
 const ICON = {
   done:'<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7.5" fill="var(--ink)"/><path d="M4.9 8.2l2.1 2.1 4.2-4.5" stroke="var(--bg)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -839,19 +1057,32 @@ $('#list').addEventListener('click', e => {
   ln.dataset.open = ln.dataset.open === '1' ? '0' : '1'; onStep(ln._ev);
 });
 
-const counts = {persona:0, now:0, prec:0};
+const counts = {persona:0, niche:0, now:0, prec:0};
+const CNT = {persona:'#cntPersona', niche:'#cntNiche', now:'#cntNow', prec:'#cntPrec'};
+const PERSONA_ORDER = ['Role','Built','Before','Talks about']; // tracks finish in any order
 function onFinding(ev){
-  const box = $('#f-'+ev.section);
+  const box = $('#f-'+ev.section); if(!box) return;
   if(!counts[ev.section]) box.innerHTML = '';
   counts[ev.section]++;
-  $({persona:'#cntPersona', now:'#cntNow', prec:'#cntPrec'}[ev.section]).textContent = counts[ev.section];
+  $(CNT[ev.section]).textContent = counts[ev.section];
   const host = ev.source_url ? ev.source_url.replace(/^https?:\/\/(www\.)?/,'').split('/')[0] : '';
-  const d = document.createElement('div'); d.className = 'fact' + (ev.label ? ' kv' : '');
-  d.innerHTML = `${ev.label ? `<span class="k">${esc(ev.label)}</span>` : ''}<div>${esc(ev.claim)}</div>${host ? `<a class="src" href="${esc(ev.source_url)}" target="_blank" rel="noopener">${esc(host)} ↗</a>` : `<span class="src">${esc(ev.via)}</span>`}`;
-  const order = ['Role','Built','Talks about','Circle'], o = order.indexOf(ev.label); // tracks finish in any order
-  d.dataset.o = o < 0 ? 99 : o;
+  const src = host ? `<a class="src" href="${esc(ev.source_url)}" target="_blank" rel="noopener">${esc(host)} ↗</a>` : `<span class="src">${esc(ev.via || '')}</span>`;
+  const claim = esc(ev.claim.replace(/ \(sample\)$/, '')).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **key words** in bold
+  const d = document.createElement('div');
+  if(ev.section === 'niche'){
+    d.className = 'fact nk';
+    d.innerHTML = `<div class="v"><span class="tag">${esc(ev.label || 'Detail')}</span><div class="claim">${claim}</div>${ev.use ? `<div class="use"><b>Use it</b><span>${esc(ev.use)}</span></div>` : ''}</div>`;
+    d.dataset.o = ev.rank ?? 50;
+  } else {
+    d.className = 'fact' + (ev.label ? ' kv' : '');
+    d.innerHTML = `${ev.label ? `<span class="k">${esc(ev.label)}</span>` : ''}<div class="v">${ev.date ? `<span class="when">${esc(ev.date)}</span>` : ''}<div class="claim">${claim}</div>${src}</div>`;
+    const o = PERSONA_ORDER.indexOf(ev.label);
+    d.dataset.o = ev.ts ? -ev.ts : o < 0 ? 99 : o;
+    const n0 = new Date(); if(ev.section === 'now' && ev.ts >= n0.getFullYear()*1e8 + (n0.getMonth()+1)*1e6 + n0.getDate()*1e4) d.classList.add('soon'); // today or later
+  }
   box.insertBefore(d, [...box.children].find(c => +c.dataset.o > +d.dataset.o) || null);
 }
+function emptyNiche(){ if(!counts.niche) $('#f-niche').innerHTML = '<div class="wait-txt">Nothing niche this run. Link more accounts to dig deeper.</div>'; }
 
 function showTab(plan){
   $('#tabResearch').setAttribute('aria-selected', !plan); $('#tabPlan').setAttribute('aria-selected', plan);
@@ -911,6 +1142,12 @@ function confirmBox(a){
 }
 const kindTag = a => `<span class="kind ${a.kind}">${a.kind === 'agent' ? 'Agent does it' : 'You go'}</span>`;
 
+let lastBig = 0;
+function countUp(node, to, from = 0){ // numbers count up instead of just appearing
+  if(!node || RM) return;
+  const t0 = performance.now();
+  (function step(now){ const k = Math.min(1, (now - t0)/700); node.textContent = num(from + (to - from)*(1 - (1 - k)**3)); if(k < 1) requestAnimationFrame(step); })(t0);
+}
 function renderActs(){
   const list = vis();
   if(cur >= list.length) cur = Math.max(0, list.length - 1);
@@ -918,7 +1155,6 @@ function renderActs(){
   $('#deck').className = 'deck' + (left <= 1 ? ' one' : left === 2 ? ' two' : '');
   $('#deck').innerHTML = a ? `
     <article class="dcard card ${dir ? 'in-' + dir : ''} ${a.late ? 'late' : ''}" aria-live="polite">
-      <div class="top"><span class="rank">Route ${cur + 1} of ${list.length}</span><div class="meta">${kindTag(a)}<span class="out ${a.out}">${OUT[a.out]}</span></div></div>
       <div class="pc">${num(pOf(a))}<sup>%</sup><span>chance this works</span></div>
       <h2>${esc(a.title)}</h2>
       <div class="pbar"><div class="trk"><i style="width:${pOf(a)*100}%"></i></div></div>
@@ -926,11 +1162,14 @@ function renderActs(){
       <div class="btns">${control(a)}</div>
       ${confirmBox(a)}
     </article>` : '<div class="wait-txt">No route for this way of meeting yet.</div>';
+  if(dir && a) countUp($('.dcard .pc')?.firstChild, pOf(a));
   dir = '';
   $('#dots').innerHTML = list.map((x,i) => `<button type="button" class="${i === cur ? 'on' : ''} ${status[x.id] ? 'done' : ''}" data-go="${i}" aria-label="Route ${i+1}"></button>`).join('');
   $('#prevBtn').disabled = cur <= 0; $('#nextBtn').disabled = cur >= list.length - 1;
   const doable = list.filter(x => !x.late), t = filter === 'all' && pTotal !== null ? pTotal : doable.length ? total(doable) : 0; // live: the Python total (deadline + budget)
   $('#big').innerHTML = doable.length ? `${num(t)}<sup>%</sup>` : '–';
+  if(doable.length && Math.abs(t - lastBig) > .0005) countUp($('#big').firstChild, t, lastBig);
+  lastBig = doable.length ? t : 0;
   $('#ringV').style.strokeDashoffset = 276.5 * (1 - t);
 }
 function go(i){
@@ -1009,7 +1248,7 @@ function tick(){ const s = Math.round((Date.now() - live.t0)/1000); $('#liveT').
 function liveStart(){ live.t0 = Date.now(); clearInterval(live.timer); live.timer = setInterval(tick, 1000); tick(); $('#live').classList.add('on'); }
 function liveStop(text){ clearInterval(live.timer); $('#live').classList.remove('on'); $('#liveNow').textContent = text; }
 $('#liveH').addEventListener('click', e => { const open = $('#liveB').hidden; $('#liveB').hidden = !open; e.currentTarget.setAttribute('aria-expanded', open); });
-$('#resetBtn').addEventListener('click', () => {
+$('#homeBtn').addEventListener('click', () => {
   clearInterval(live.timer); live.n = 0; $('#trail').innerHTML = ''; $('#live').classList.remove('on');
   $('#liveNow').textContent = 'Waiting to start'; $('#liveT').textContent = '0:00'; $('#liveUrl').textContent = 'about:blank'; $('#liveSite').textContent = '–';
 });
@@ -1024,11 +1263,11 @@ function toast(t){ let el = $('.toast'); if(!el){ el = document.createElement('d
 const G0 = 'Step 0 · Who', G1 = 'Step 1 · What he wants', G2 = 'Step 2 · Right now', G3 = 'Step 3 · Needs', G5 = 'Step 5 · Plan';
 const LAYERS = (a,b,c) => [['Broad search',a],['Filter sources',b],['Deep read',c]];
 
-const BROWSE = {
-  web:[['exa.ai','Searching the web for "Boris Jabes"','exa.ai/search?q=Boris+Jabes'],['techtarget.com','Filtering 38 results down to 9 sources','techtarget.com/news/…'],['crunchbase.com','Reading the full page','crunchbase.com/person/…']],
-  podcast:[['youtube.com','Searching podcasts and talks','youtube.com/results?search_query=Boris+Jabes'],['youtube.com','Keeping 4 episodes with transcripts','youtube.com/watch?v=…'],['youtube.com','Reading the transcript, his words only','youtube.com/watch?v=… · transcript']],
-  linkedin:[['linkedin.com','Opening his profile, signed in as you','linkedin.com/in/…'],['linkedin.com','Scrolling his recent posts','linkedin.com/in/…/recent-activity'],['linkedin.com','Checking mutual connections','linkedin.com/search/results/people/…']],
-  x:[['x.com','Browsing his posts','x.com/search?q=Boris%20Jabes'],['x.com','Scrolling his replies','x.com/…/with_replies'],['x.com','Mapping who he replies to most','x.com/…/with_replies']],
+const BROWSE = { // what the agent has open at each layer of a track
+  web:[['exa.ai','Searching the web for "Boris Jabes"','exa.ai/search?q=Boris+Jabes'],['siliconangle.com','Reading the Fivetran–Census deal coverage','siliconangle.com/2025/05/01/fivetran-acquire-census…'],['crunchbase.com','Checking his current role and city','crunchbase.com/person/boris-jabes'],['fivetran.com','Reading the press release','fivetran.com/press/fivetran-signs-agreement-to-acquire-census…']],
+  podcast:[['exa.ai','Finding every podcast he joined','exa.ai/search?q=Boris+Jabes+podcast'],['datastackshow.substack.com','Reading ep. 78 notes, jumping to 6:39','datastackshow.substack.com/p/78-the-etymology-of-reverse-etl…'],['bigeye.com','Reading the full Bigeye interview','bigeye.com/the-observatory/boris-jabes-census'],['the-sequel-show.simplecast.com','Scanning the guest list of his own show','the-sequel-show.simplecast.com']],
+  linkedin:[['linkedin.com','Opening his profile, signed in as you','linkedin.com/in/…'],['startupintros.com','Cross-checking his Meldium and Microsoft years','startupintros.com/people/boris-jabes'],['linkedin.com','Checking mutual connections','linkedin.com/search/results/people/…']],
+  x:[['x.com','Opening his timeline','x.com/…'],['x.com','No posts in 30 days, checking replies','x.com/…/with_replies'],['x.com','Nothing recent, moving on','x.com/…']],
 };
 async function track(key, label, layers, finds, note, via){
   if(key !== 'web' && key !== 'podcast' && !isOn(key)){
@@ -1054,26 +1293,28 @@ async function run(){
 
   emit({type:'step', id:'s0', group:G0, label:'Identifying which Boris Jabes', status:'running'});
   await sleep(900); if(!alive()) return;
-  emit({type:'step', id:'s0', group:G0, label:'Identified the target', status:'done', note:'YC Visiting Partner; 2 same-name people ruled out'});
+  emit({type:'step', id:'s0', group:G0, label:'Identified the target', status:'done', note:'YC Visiting Partner, ex-Census CEO'});
   $('#role').textContent = 'YC Visiting Partner · co-founder of Census';
   emit({type:'step', id:'s0b', group:G0, label:'Read your profile', status:'done', note:'3 things you can offer'});
   if(isOn('calendar')) emit({type:'step', id:'s0c', group:G0, label:'Read your free time', status:'done', note:'free 21:00–23:30 tonight (sample)', via:'Calendar'});
 
   await Promise.all([
     track('web', 'Searched the web', LAYERS('38 results','9 kept','6 pages'), [
-      {section:'persona', label:'Role', claim:'Visiting Partner at Y Combinator', source_url:'https://www.crunchbase.com/'},
-      {section:'persona', label:'Built', claim:'Co-founded Census, acquired by Fivetran (May 2025)', source_url:'https://www.techtarget.com/'},
-      {section:'now', claim:'Has a speaker page at Coalesce, the dbt Labs conference', source_url:'https://coalesce.getdbt.com/'},
+      {section:'persona', label:'Role', claim:'**Visiting Partner at Y Combinator**, based in New York', source_url:'https://www.crunchbase.com/person/boris-jabes'},
+      {section:'persona', label:'Built', claim:'Co-founded **Census** in 2018. **Fivetran** agreed to buy it on May 1, 2025', source_url:'https://siliconangle.com/2025/05/01/fivetran-acquire-census-extend-platform-reverse-etl-data-activation/'},
+      {section:'niche', label:'Time zone', rank:5, claim:'Based in **New York**, which is **13 hours behind Taipei**', use:'Ask for the follow-up call at 9 a.m. New York time. That is 10 p.m. in Taipei.', depth:'Profile city + tonight\'s event page', source_url:'https://www.crunchbase.com/person/boris-jabes'},
     ], '6 pages read, 3 findings'),
-    track('podcast', 'Searched podcasts and talks', LAYERS('12 episodes','4 transcripts','his words only'), [
-      {section:'persona', label:'Talks about', claim:'Data activation and the modern data stack (sample)', source_url:'https://www.youtube.com/results?search_query=Boris+Jabes'},
-    ], '4 episodes, quotes pending'),
-    track('linkedin', 'Read LinkedIn', LAYERS('profile','posts, comments','mutuals'), [
-      {section:'prec', claim:'You share 2 connections; one used to work at Census (sample)', source_url:'https://www.linkedin.com/'},
-    ], '2 mutual connections', 'LinkedIn'),
-    track('x', 'Read X posts and replies', LAYERS('recent posts','replies only','top 5 accounts'), [
-      {section:'persona', label:'Circle', claim:'Founders and data-tool builders (sample)', source_url:'https://x.com/'},
-    ], 'inner circle: 5 accounts'),
+    track('podcast', 'Searched podcasts and talks', LAYERS('6 episodes','3 with notes','1 timestamp'), [
+      {section:'persona', label:'Talks about', claim:'**Operational analytics**: getting warehouse data into the tools teams use', source_url:'https://dataengineeringpodcast.com/census-operational-analytics-episode-231'},
+      {section:'niche', label:'Hot take', rank:1, date:'Apr 2022', claim:'Suggested **“TEL”** may be a better name than **“reverse ETL”** for what Census does', use:'Open with it: ask what he would call your category. It shows you did the homework.', depth:'Interview: The Observatory by Bigeye', source_url:'https://www.bigeye.com/the-observatory/boris-jabes-census'},
+      {section:'niche', label:'Timestamp', rank:2, date:'Mar 9, 2022', claim:'The Data Stack Show ep. 78 has a segment on **where “reverse ETL” came from**, starting at **6:39**', use:'Listen from 6:39 before judging, then bring up one detail from it.', depth:'Episode notes: jumped to 6:39 of about an hour', source_url:'https://datastackshow.substack.com/p/78-the-etymology-of-reverse-etl-and-bb8'},
+      {section:'niche', label:'His own show', rank:3, claim:'Hosts **The Sequel Show**, a podcast for data people. Guests include **Benn Stancil** (Mode) and **Jeremiah Lowin** (Prefect)', use:'Pitch a sharp data topic as a guest, not a favor.', depth:'Guest list: 7 episodes scanned', source_url:'https://the-sequel-show.simplecast.com/'},
+    ], '6 episodes, 1 timestamp, 1 hot take'),
+    track('linkedin', 'Read LinkedIn', LAYERS('profile','career history','mutuals'), [
+      {section:'persona', label:'Before', claim:'Co-founded **Meldium** (sold to LogMeIn in 2014). Before that, **Visual Studio C++** at Microsoft', source_url:'https://www.startupintros.com/people/boris-jabes'},
+      {section:'niche', label:'Shared ground', rank:4, claim:'Studied **software engineering at Waterloo**, then was **Lead PM for Visual Studio C++** at Microsoft', use:'If you are technical, skip the pitch deck. Show him the code and the architecture.', depth:'Career history: third-party profile, verify on LinkedIn', source_url:'https://www.startupintros.com/people/boris-jabes'},
+    ], 'career history cross-checked', 'LinkedIn'),
+    track('x', 'Read X posts and replies', LAYERS('his timeline','none in 30 days','skipped'), [], 'no posts in the last 30 days'),
     track('email', 'Work email', [], [], ''),
   ]);
   if(!alive()) return;
@@ -1082,12 +1323,11 @@ async function run(){
   browse('news.google.com', 'Searching news from the last 7 days', 'news.google.com/search?q=Boris+Jabes+when:7d');
   await sleep(900); if(!alive()) return;
   emit({type:'step', id:'m7', group:G2, label:'Checked mentions', status:'none', note:'none in 7 days; widened to 30, still none'});
-  emit({type:'step', id:'rp', group:G2, label:'Reading his latest posts', status:'running', via:'X'});
-  browse('x.com', 'Reading his latest posts', 'x.com/…');
+  emit({type:'step', id:'rp', group:G2, label:'Reading the latest news', status:'running'});
+  browse('siliconangle.com', 'Reading the latest coverage', 'siliconangle.com/2025/05/01/fivetran-acquire-census…');
   await sleep(800); if(!alive()) return;
-  emit({type:'finding', section:'now', claim:'Latest X post is about data tooling for AI teams (sample)', source_url:'https://x.com/'});
-  emit({type:'finding', section:'now', claim:'Latest news coverage: the Fivetran–Census acquisition (May 2025); nothing newer', source_url:'https://www.techtarget.com/'});
-  emit({type:'step', id:'rp', group:G2, label:'Read his latest posts and news', status:'done', note:'1 recent post, no new coverage', via:'X'});
+  emit({type:'finding', section:'now', date:'May 1, 2025', ts:202505010000, claim:'**Fivetran agreed to buy Census**; he was set to lead its data activation work. Nothing newer found', source_url:'https://siliconangle.com/2025/05/01/fivetran-acquire-census-extend-platform-reverse-etl-data-activation/'});
+  emit({type:'step', id:'rp', group:G2, label:'Read the latest news', status:'done', note:'latest coverage: May 2025'});
   emit({type:'step', id:'bk', group:G2, label:'Probing booking pages', status:'running'});
   browse('calendly.com', 'Trying calendly.com/boris-jabes', 'calendly.com/boris-jabes');
   await sleep(800); if(!alive()) return;
@@ -1095,7 +1335,7 @@ async function run(){
   emit({type:'step', id:'ev', group:G2, label:'Finding events before the deadline', status:'running'});
   browse('lu.ma', 'Searching events before the deadline', 'lu.ma/discover');
   await sleep(900); if(!alive()) return;
-  emit({type:'finding', section:'now', claim:'Tonight: first prize at this hackathon is office hours with him. Judging starts 22:45', source_url:'https://lu.ma/'});
+  emit({type:'finding', section:'now', date:'Tonight · 22:45', ts:202611112245, claim:'**Judges this hackathon** (c0mpiled-18, YC Startup School Taipei). First prize is **office hours with him**', source_url:'https://luma.com/compiled-poy7'});
   emit({type:'step', id:'ev', group:G2, label:'Found events', status:'done', note:'1 tonight: this hackathon'});
   if(isOn('luma')){
     emit({type:'step', id:'lu', group:G2, label:'Signing in to Luma to read the guest list', status:'running', via:'Luma'});
@@ -1103,10 +1343,11 @@ async function run(){
     await sleep(550); if(!alive()) return;
     browse('lu.ma', 'Reading the guest list', 'lu.ma/…/guests');
     await sleep(550); if(!alive()) return;
-    emit({type:'step', id:'lu', group:G2, label:'Read the Luma guest list', status:'done', note:'you\'re registered; he\'s listed as a judge (sample)', via:'Luma'});
+    emit({type:'step', id:'lu', group:G2, label:'Read the Luma guest list', status:'done', note:'you\'re registered; he\'s listed as a judge', via:'Luma'});
   } else emit({type:'step', id:'lu', group:G2, label:'Luma guest list', status:'locked', note:'Luma not linked'});
-  emit({type:'finding', section:'prec', claim:'Hackathon winners get office hours with the judging partner: a public route in', source_url:'https://lu.ma/'});
-  emit({type:'finding', section:'prec', claim:'Founders describe meeting him within a week through an intro from a portfolio founder (sample)', source_url:'https://www.ycombinator.com/blog'});
+  emit({type:'finding', section:'prec', date:'Tonight', ts:202611112200, claim:'**Hackathon winners** get office hours with him: it is tonight\'s first prize', source_url:'https://luma.com/compiled-poy7'});
+  emit({type:'finding', section:'prec', date:'Apr 2022', ts:202204010000, claim:'**Bigeye\'s Kyle Kirwan** got a full interview with him for The Observatory', source_url:'https://www.bigeye.com/the-observatory/boris-jabes-census'});
+  emit({type:'finding', section:'prec', date:'Mar 9, 2022', ts:202203090000, claim:'**The Data Stack Show** had him on for about an hour on reverse ETL', source_url:'https://datastackshow.substack.com/p/78-the-etymology-of-reverse-etl-and-bb8'});
 
   emit({type:'step', id:'nd', group:G3, label:'Guessing what he wants', status:'running'});
   browse('reasoning', 'Matching his needs to what you can offer', 'meetble://reasoning');
@@ -1127,14 +1368,15 @@ async function run(){
 
 // Plain-language reasons shown on each card
 const WHY_DO = {
-  event:['He\'s judging this hackathon tonight, so he\'s here to meet teams','Your demo ties straight to what he built at Census','No intro or cold message needed'],
-  referral:['A warm intro is the strongest route to a YC partner','You share 2 connections, one of them ex-Census','They can message him tonight, before judging'],
-  register:['He\'s on the after-party guest list','Conversations are easier after judging is over','The agent registers you with your Luma account'],
+  event:['He\'s judging this hackathon tonight; first prize is office hours with him','Open with his “TEL, not reverse ETL” take: proof you did the homework','No intro or cold message needed'],
+  referral:['A warm intro is the strongest route to a YC partner','The organizers work with him tonight and are in the room','They can message him before judging starts'],
+  register:['Being in the room at 22:45 is the whole game tonight','The agent registers you with your Luma account','Takes 30 seconds'],
   network:['The organizers and other judges know him well','They\'re all in this room tonight','They can walk you over at the right moment'],
-  xreply:['He replies to builders on X','A sharp reply puts your name in front of him tonight','Costs you 15 minutes'],
-  linkedin:['You share 2 connections, so you won\'t look like a stranger','The note points at his work, not your ask','Sets up a follow-up after tonight'],
+  xreply:['A sharp reply puts your name in front of him tonight','Reply with a concrete data point, not praise','Costs you 15 minutes'],
+  linkedin:['Your note can cite his Census and Visual Studio work','The note points at his work, not your ask','Sets up a follow-up after tonight'],
+  guest:['He hosts The Sequel Show and has data founders on it','A guest pitch gives before it asks','Booking takes days, so it\'s a follow-up after tonight'],
   email:['A value-first email stands out in a partner\'s inbox','Good as a follow-up after you meet','Replies usually take days, so it misses tonight'],
-  coffee:['A small gift tied to his work gets noticed','His office address is public','Arrives after the deadline, so it\'s a later move'],
+  coffee:['A small gift tied to his work gets noticed','Best as a thank-you after tonight','Arrives after the deadline, so it\'s a later move'],
 };
 
 function buildActions(a1, a2, a3){
@@ -1144,45 +1386,50 @@ function buildActions(a1, a2, a3){
     A({id:'event', kind:'you', out:'face', title:'Be at judging at 22:45 with a 60-second demo', cta:'Add 22:45 to my calendar', base:.20, rel, time:1.5, chan, hours:1, acct:'calendar',
        doWhat:'Adds judging at 22:45 to your calendar with an opening line', doneNote:'on your calendar, 22:45',
        why:['In person at an event he attends: 10–25%','Tied to what he built','The event is tonight','No mutual contact needed', chan<1?'You won\'t be there':'He\'s there to meet teams'],
-       draft:'Opening: "You built Census to get data where it\'s used. We built an agent that finds the best route to reach a person. Can I show you the 60-second version?"'}),
-    A({id:'referral', kind:'agent', out:'call', title:'Get a mutual connection to intro you tonight', cta:'Send intro request', base:.35, warm, chan: warm>1 ? 1 : .3, hours:.5, acct:'linkedin',
-       doWhat:'Sends the intro request to your mutual connection',
+       draft:'Opening: "You once said reverse ETL might be better called TEL. We built the TEL for people: an agent that finds the right route to anyone. Can I show you the 60-second version?"'}),
+    A({id:'referral', kind:'agent', out:'call', title:'Ask an organizer to introduce you before judging', cta:'Send intro request', base:.35, warm, chan: warm>1 ? 1 : .3, hours:.5, acct:'linkedin',
+       doWhat:'Sends the intro request to an organizer',
        why:['Referrals: 30–50%','Neutral','Same-day ask', warm>1?'You know someone close to him':'No one to ask', warm>1?'Reachable tonight':'No one to ask'],
-       draft:'Hi! I\'m at the hackathon where Boris Jabes is judging tonight. Would you send him a one-line intro?\nForwardable: "[Your name] built Meetble tonight, an agent that finds the best route to reach anyone. Worth 5 minutes."'}),
-    A({id:'register', kind:'agent', out:'face', title:'Register for the after-party he\'s listed at', cta:'Register me on Luma', base:.10, time:1.3, chan, hours:1, acct:'luma',
-       doWhat:'Registers you for the after-party with your Luma account', doneNote:'registered',
-       why:['Same room as him: 10–25%, after-party is looser','Neutral','Tonight, right after judging','Organizers know him','He\'s on the guest list (sample)']}),
+       draft:'Hi! Could you introduce me to Boris before judging? One line is enough:\n"[Your name] built Meetble tonight, an agent that finds the best route to reach anyone. Worth 5 minutes."'}),
+    A({id:'register', kind:'agent', out:'face', title:'Get a seat in the judging room', cta:'Register me on Luma', base:.10, time:1.3, chan, hours:1, acct:'luma',
+       doWhat:'Registers you for judging with your Luma account', doneNote:'registered',
+       why:['Same room as him: 10–25%','Neutral','Judging starts at 22:45','Organizers know him','He judges in that room']}),
     A({id:'network', kind:'you', out:'face', title:'Meet the other judges and organizers first', cta:'Plan who to meet', base:.08, time:1.3, chan, hours:1, acct:'calendar',
        doWhat:'Adds a 21:30 slot to meet organizers, with names', doneNote:'on your calendar, 21:30',
        why:['Network first: 5–15%','Neutral','Everyone is in one room tonight','Organizers know him','In person']}),
     A({id:'xreply', kind:'agent', out:'reply', title:'Reply to his latest post on X', cta:'Post the reply', base:.03, rel, time:1.3, hours:.3, acct:'x',
        doWhat:'Posts the reply from your X account',
-       why:['Cold reply or DM: 1–5%','On his topic','Recent post','Cold','He replies on X'],
+       why:['Cold reply or DM: 1–5%','On his topic','No recent post to ride','Cold','Public and fast'],
        draft:'Add one concrete point to his latest post, then: "Building on exactly this at tonight\'s hackathon."'}),
     A({id:'linkedin', kind:'agent', out:'reply', title:'LinkedIn connection request with a note', cta:'Send the request', base:.04, rel, warm: warm>1 ? 1.3 : 1, hours:.2, days:1, acct:'linkedin',
        doWhat:'Sends the request from your LinkedIn account',
-       why:['Cold DM: 1–5%','Note cites his work','Neutral', warm>1?'Mutual connections show':'Cold','Accepts can take a day'],
+       why:['Cold DM: 1–5%','Note cites his work','Neutral', warm>1?'Warmer with shared connections':'Cold','Accepts can take a day'],
        draft:'Hi Boris, I\'m at tonight\'s hackathon. I built an agent that turns research on a person into ranked ways to reach them. Would love your take on the data side.'}),
+    A({id:'guest', kind:'agent', out:'reply', title:'Pitch a guest spot on The Sequel Show', cta:'Send the guest pitch', base:.05, rel, hours:.5, days:7, late:true, acct:'email',
+       doWhat:'Sends the pitch from your email',
+       why:['Guest pitch: 3–8%','On his own show\'s topic','Booking takes days','Cold, but it gives first','He hosts the show'],
+       draft:'Subject: A Sequel Show idea: agents that find the right person\n\nHi Boris, …'}),
     A({id:'email', kind:'agent', out:'reply', title:'Send a value-first cold email', cta:'Send the email', base:.06, rel, hours:.5, days:3, late:true, acct:'email',
        doWhat:'Sends from your email',
        why:['Value-first cold email: 3–10%','On his topic','Replies usually take days','Cold','Work-address guess: medium confidence'],
        draft:'Subject: An agent built on the Census idea, for people\n\nHi Boris, …'}),
     A({id:'coffee', kind:'agent', out:'reply', title:'Send coffee to his team with a note', cta:'Order coffee', cost:4000, base:.08, rel, hours:.5, days:3, late:true,
        doWhat:'Places the order with a note',
-       why:['Office delivery: 5–15%','Note tied to his work','Arrives after the deadline','Cold','Office address is public']}),
+       why:['Office delivery: 5–15%','Note tied to his work','Arrives after the deadline','Cold','Needs an office address']}),
   ].map(a => ({...a, whyDo: WHY_DO[a.id]}));
 }
 
 /* ---------- restart ---------- */
-$('#resetBtn').addEventListener('click', () => {
+$('#homeBtn').addEventListener('click', () => {
+  ACCTS.forEach(a => a.on = false); renderAccts(); if(LIVE) refreshLogins(false);
   runId++; es?.close(); if(LIVE) fetch(q('/api/stop'), {method:'POST'}).catch(() => {}); $('#planSum').textContent = '';
   log.length = 0; actions = []; filter = 'all'; openConfirm = null; cur = 0;
   Object.keys(status).forEach(k => delete status[k]); Object.keys(groups).forEach(k => delete groups[k]);
-  counts.persona = counts.now = counts.prec = 0;
+  counts.persona = counts.niche = counts.now = counts.prec = 0;
   $('#list').innerHTML = ''; $('#evlog').textContent = '';
   document.querySelectorAll('#feed .q, #feed .reply, #feed .me:not(#meBubble)').forEach(n => n.remove());
-  $('#f-persona').innerHTML = ''; $('#f-now').innerHTML = $('#f-prec').innerHTML = '<div class="wait-txt">Waiting for research…</div>';
-  ['#cntPersona','#cntNow','#cntPrec','#planCnt'].forEach(s => $(s).textContent = '');
+  $('#f-persona').innerHTML = ''; $('#f-niche').innerHTML = $('#f-now').innerHTML = $('#f-prec').innerHTML = '<div class="wait-txt">Waiting for research…</div>';
+  ['#cntPersona','#cntNiche','#cntNow','#cntPrec','#planCnt'].forEach(s => $(s).textContent = '');
   $('#role').textContent = 'Identifying…'; $('#tabPlan').disabled = true; showTab(false);
   $('#kicker').textContent = 'Anyone is meetable'; $('#hello').innerHTML = 'Who do you want to <b>meet</b>?';
   ta.value = ''; ta.style.height = ''; $('#composer').placeholder = 'Ask the agent anything…';

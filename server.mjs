@@ -107,14 +107,53 @@ const sid = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.codePointAt(0
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 const DIM_LABEL = { web: "Web", podcast: "Talks about", x: "X", linkedin: "LinkedIn", instagram: "Instagram", email: "Email" };
 
+// "2025-05" / "2026-11-09" / "2026-11-11T22:45" -> { date: "May 2025" | "Nov 9" | "Today · 22:45", ts: 202611112245 } for the timeline
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function dateOf(iso, now = new Date()) {
+  const m = String(iso || "").match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?(?:[T ](\d{2}):(\d{2}))?/);
+  if (!m) return {};
+  const [y, mo, d, hh, mm] = m.slice(1).map((v) => (v === undefined ? undefined : +v));
+  const ts = y * 1e8 + (mo || 1) * 1e6 + (d || 1) * 1e4 + (hh || 0) * 100 + (mm || 0);
+  const time = hh === undefined ? "" : ` · ${m[4]}:${m[5]}`;
+  let date = String(y);
+  if (mo && !d) date = `${MON[mo - 1]} ${y}`;
+  else if (d) date = y === now.getFullYear() && mo === now.getMonth() + 1 && d === now.getDate() ? `Today${time}` : `${MON[mo - 1]} ${d}${y === now.getFullYear() ? "" : `, ${y}`}${time}`;
+  return { date, ts };
+}
+
+// Niche details: his own words and other specifics only a deep dig finds, each with a hint on how to use it.
+const THEME = {
+  looking_for: ["Looking for", "Lead with this: it's what he says he wants.", 1],
+  frustrates: ["Pet peeve", "Avoid this, and say that you did.", 2],
+  excites: ["Lights him up", "Open on this topic.", 3],
+  repeated_story: ["Story he retells", "Reference it to show you listened.", 4],
+  other: ["In his words", "Quote it back in your first line.", 5],
+};
+function nicheOf(f) {
+  const d = f.data || {};
+  if (f.kind === "quote") {
+    const [label, use, rank] = THEME[d.theme] || THEME.other;
+    return { label, use, rank, depth: d.episode ? `Transcript: ${String(d.episode).slice(0, 70)}` : "Transcript" };
+  }
+  if (f.kind === "mutuals") return { label: "Mutual connections", use: "Ask the closest one for a two-line intro.", rank: 6, depth: "Your LinkedIn, signed in" };
+  if (f.kind === "inner_circle") return { label: "Inner circle", use: "Warm path: get this person to introduce you.", rank: 7, depth: "His replies, last 60 days" };
+  if (f.kind === "post") return { label: "Recent post", use: "Reply with one concrete point today.", rank: 8, depth: f.dimension === "linkedin" ? "His LinkedIn activity" : "His X timeline" };
+  if (f.kind === "email") return { label: "Work email", use: "Send the value-first email here.", rank: 9, depth: "Address pattern check" };
+  return null;
+}
+
 function findingEvents(research) {
-  const evs = [], per = { persona: 0, now: 0, prec: 0 };
+  const evs = [], per = { persona: 0, niche: 0, now: 0, prec: 0 };
   for (const f of research.findings || []) {
     const dim = f.dimension || "web";
-    const section = dim === "precedent" ? "prec" : f.step === 2 || ["mention", "event", "booking"].includes(dim) ? "now" : "persona";
+    const niche = nicheOf(f);
+    const section = niche ? "niche" : dim === "precedent" ? "prec" : f.step === 2 || ["mention", "event", "booking"].includes(dim) ? "now" : "persona";
     if (per[section]++ >= 14) continue;
-    const label = section === "persona" ? (f.kind === "bio" ? "Role" : DIM_LABEL[dim] || "") : "";
-    evs.push({ type: "finding", section, label, claim: f.quote ? `${f.claim} “${String(f.quote).slice(0, 160)}”` : f.claim, source_url: f.source_url });
+    const label = niche ? niche.label : section === "persona" ? (f.kind === "bio" ? "Role" : DIM_LABEL[dim] || "") : "";
+    const when = section === "persona" ? {} : dateOf(f.date);
+    const claim = niche ? (f.kind === "quote" && f.quote ? `“${String(f.quote).slice(0, 220)}”` : f.claim)
+      : f.quote ? `${f.claim} “${String(f.quote).slice(0, 160)}”` : f.claim;
+    evs.push({ type: "finding", section, label, ...when, ...(niche ? { use: niche.use, depth: niche.depth, rank: niche.rank } : {}), claim, source_url: f.source_url });
   }
   return evs;
 }
@@ -307,4 +346,4 @@ const server = createServer(async (req, res) => {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   server.listen(PORT, HOST, () => console.log(`Meetble is running on ${HOST}:${PORT}`));
 }
-export { server, toUiAction, findingEvents };
+export { server, toUiAction, findingEvents, dateOf, nicheOf };
