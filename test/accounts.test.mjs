@@ -51,6 +51,9 @@ describe("accounts", () => {
     const { exp, ...noExp } = good;
     await expect(setup(noExp).verifyGoogle("t")).rejects.toThrow(/expired/);
     await expect(setup({ ...good, exp: "soon" }).verifyGoogle("t")).rejects.toThrow(/expired/);
+    await expect(setup({ ...good, exp: [4102444800] }).verifyGoogle("t")).rejects.toThrow(/expired/);
+    await expect(setup({ ...good, exp: true }).verifyGoogle("t")).rejects.toThrow(/expired/);
+    await expect(setup({ ...good, exp: Math.floor(Date.now() / 1000) + 600 }).verifyGoogle("t")).resolves.toMatchObject({ sub: "123" });
     const t0 = 1_800_000_000_000;
     await expect(setup({ ...good, exp: String(t0 / 1000) }, { now: () => t0 }).verifyGoogle("t")).rejects.toThrow(/expired/);
   });
@@ -66,6 +69,22 @@ describe("accounts", () => {
     t += 61_000;
     await expect(bad()).rejects.toThrow(/didn't accept/);
     expect(calls).toBe(3); // rotation is still picked up after a minute
+  });
+  it("shares one key fetch between concurrent sign-ins, and backs off after a failure", async () => {
+    let calls = 0, fail = true, t = 1_800_000_000_000;
+    const fetchImpl = async () => { calls++; await new Promise((r) => setTimeout(r, 5));
+      return fail ? { ok: false } : { ok: true, headers: new Map([["cache-control", "max-age=3600"]]), json: async () => ({ keys: [JWK] }) }; };
+    const a = setup(good, { fetchImpl, now: () => t });
+    const tok = () => a.verifyGoogle(jwt({ ...good, exp: String(t / 1000 + 600) }));
+    const r = await Promise.allSettled([tok(), tok(), tok(), tok()]);
+    expect(r.every((x) => x.status === "rejected" && /reach Google/.test(x.reason.message))).toBe(true);
+    expect(calls).toBe(1);
+    fail = false;
+    await expect(tok()).rejects.toThrow(/reach Google/); // still backing off
+    expect(calls).toBe(1);
+    t += 11_000;
+    await Promise.all([tok(), tok(), tok()]);
+    expect(calls).toBe(2);
   });
   it("drops a session once its email leaves the allow list", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "mb-"));

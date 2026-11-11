@@ -60,17 +60,25 @@ export function createAccounts({ dataDir, clientId, secret, allow = "", fetchImp
   }
   // Google's signing keys, cached for as long as Google says (Cache-Control max-age), fetched with a 5 s limit.
   // An unknown kid forces a refresh (Google rotated its keys), but at most once a minute, so junk tokens can't make us hammer Google.
-  let jwks = null, jwksUntil = 0, lastForced = -Infinity;
+  // Concurrent sign-ins share one in-flight fetch, and after a failed fetch nobody retries for 10 s.
+  let jwks = null, jwksUntil = 0, lastForced = -Infinity, inflight = null, failedUntil = 0;
+  const unreachable = () => httpError(503, "Couldn't reach Google to check the sign-in. Try again.");
   async function googleKeys(force) {
     if (force && now() - lastForced < 60_000) force = false;
     if (force) lastForced = now();
     if (!force && jwks && now() < jwksUntil) return jwks;
-    const r = await fetchImpl("https://www.googleapis.com/oauth2/v3/certs", { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) throw httpError(503, "Couldn't reach Google to check the sign-in. Try again.");
-    const body = await r.json();
-    const age = Number(String(r.headers?.get?.("cache-control") || "").match(/max-age=(\d+)/)?.[1] || 3600);
-    jwks = body.keys || []; jwksUntil = now() + age * 1000;
-    return jwks;
+    if (inflight) return inflight;
+    if (now() < failedUntil) { if (jwks) return jwks; throw unreachable(); }
+    inflight = (async () => {
+      const r = await fetchImpl("https://www.googleapis.com/oauth2/v3/certs", { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) throw unreachable();
+      const body = await r.json();
+      const age = Number(String(r.headers?.get?.("cache-control") || "").match(/max-age=(\d+)/)?.[1] || 3600);
+      jwks = Array.isArray(body.keys) ? body.keys : []; jwksUntil = now() + age * 1000;
+      return jwks;
+    })().catch((e) => { failedUntil = now() + 10_000; if (jwks) return jwks; throw e.status ? e : unreachable(); })
+      .finally(() => { inflight = null; });
+    return inflight;
   }
   /** Verify a Google Identity Services ID token (the "credential" the Sign in with Google button returns) locally, RS256 against Google's keys. */
   async function verifyGoogle(credential) {
@@ -87,8 +95,8 @@ export function createAccounts({ dataDir, clientId, secret, allow = "", fetchImp
     if (!ok) throw httpError(401, "Google didn't accept that sign-in");
     if (t.aud !== clientId) throw httpError(401, "sign-in was for a different app");
     if (!["accounts.google.com", "https://accounts.google.com"].includes(t.iss)) throw httpError(401, "bad issuer");
-    const exp = Number(t.exp);
-    if (t.exp == null || t.exp === "" || !Number.isFinite(exp) || exp * 1000 <= now()) throw httpError(401, "sign-in expired, try again");
+    const exp = typeof t.exp === "number" ? t.exp : typeof t.exp === "string" && /^\d+$/.test(t.exp) ? Number(t.exp) : NaN;
+    if (!Number.isFinite(exp) || exp * 1000 <= now()) throw httpError(401, "sign-in expired, try again");
     if (String(t.email_verified) !== "true") throw httpError(401, "Google email isn't verified");
     if (!allowed(t.email, t.hd)) throw httpError(403, "This Meetble is invite-only. Ask the owner to add " + t.email);
     return { sub: String(t.sub), email: t.email, name: t.name || t.email, picture: t.picture || "", hd: t.hd };
