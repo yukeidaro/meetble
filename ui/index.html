@@ -690,7 +690,7 @@ const vivid = c => { const [h, s, l] = rgb2hsl(c); return hsl2rgb([h, Math.max(s
 const MASK = [[0,1],[.5,1],[.66,.93],[.78,.74],[.87,.48],[.94,.22],[1,0]]; // soft edge: no hard rim
 
 class Orb{
-  constructor(canvas, {strands = 520, sparks = 150, rf = .27, float = 1} = {}){
+  constructor(canvas, {strands = 520, sparks = 150, rf = .24, float = 1} = {}){
     this.c = canvas; this.x = canvas.getContext('2d'); this.ns = strands; this.nk = sparks; this.rf = rf; this.fl = float;
     [this.body, this.bx] = layer(); [this.trail, this.tx] = layer(); [this.bloom, this.gx] = layer(); [this.mask, this.mx] = layer(); [this.film, this.fx] = layer();
     this.mode = 'idle'; this.energy = 0; this.burst = 0; this.t = Math.random()*100; this.tw = 0; this.W = 0; this.H = 0;
@@ -774,7 +774,7 @@ class Orb{
     const ox = (noise3(t*.12, 3.1, .5)*.07*R + this.j[0])*fl;
     const oy = (Math.sin(t*.7)*.03*R + noise3(t*.11, 7.7, .5)*.05*R + this.j[1])*fl;
     const sA = clamp(Math.hypot(this.jv[0], this.jv[1])/R*.05, 0, .16)*fl, aA = Math.atan2(this.jv[1], this.jv[0]); // stretch along the jiggle
-    const sW = .012*Math.sin(1.4*t)*fl, sB = 1 + .035*(2*br - 1) + .012*this.energy*Math.sin(4.6*t);
+    const sW = .012*Math.sin(1.4*t)*fl, sB = 1 + .015*(2*br - 1) + .012*this.energy*Math.sin(4.6*t);
     const T = mat(stretch(aA, 1 + sA, 1 - sA*.8), stretch(.5*t, 1 + sW, 1 - sW)).map(v => v*sB);
     this.stepP(dt, .7 + .9*br + .4*this.energy);
     // bloom
@@ -876,7 +876,7 @@ class Orb{
       [[0,1],[.35,.8],[.55,.42],[.75,.14],[1,0]].forEach(([o, k]) => h.addColorStop(o, rgba(col, a*k)));
       x.fillStyle = h; x.fillRect(cx - rad, cy - rad, 2*rad, 2*rad);
     };
-    halo(0, 0, 1.62*R*(1 + .08*br), vivid(glow), ga);
+    halo(0, 0, 1.62*R*(1 + .04*br), vivid(glow), ga);
     halo(Math.cos(.23*t)*.16*R, Math.sin(.31*t)*.16*R, 1.4*R, vivid(mixc(pal[2], pal[4], .5 + .5*Math.sin(.21*t))), .55*ga);
     const au = mixc(vivid(glow), WHITE, .4), ar = x.createRadialGradient(0, 0, R*.7, 0, 0, R*1.36); // a ring of light that swells with each breath
     ar.addColorStop(0, rgba(au, 0)); ar.addColorStop(.48, rgba(au, .18 + .42*br)); ar.addColorStop(1, rgba(au, 0));
