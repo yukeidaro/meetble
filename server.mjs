@@ -238,6 +238,26 @@ async function run(j, body) {
   if (!actions.length) throw new Error("No actions came back from Step 5");
 }
 
+// ---------- sign-ins: the same check the research pre-flight runs, in your own Chrome (browser_tools.py login-check) ----------
+let logins = null, loginsAt = 0, loginsBusy = null;
+async function checkLogins(force) {
+  if (!force && logins && Date.now() - loginsAt < 60_000) return logins;
+  if (!loginsBusy) loginsBusy = (async () => {
+    try {
+      const { loadDotEnv } = await import("./dist/core/env.js");
+      loadDotEnv(join(ROOT, ".env"));
+      const { loginCheck, LOGIN_URLS } = await import("./dist/tools/browser_session.js");
+      const r = await loginCheck({}, null, { cwd: ROOT, env: process.env, timeoutMs: 180_000 });
+      logins = { ...r, urls: LOGIN_URLS };
+    } catch (e) {
+      logins = { error: String(e?.message || e).slice(0, 200) };
+    }
+    loginsAt = Date.now(); loginsBusy = null;
+    return logins;
+  })();
+  return loginsBusy;
+}
+
 // ---------- http ----------
 const MIME = { ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8", ".md": "text/markdown; charset=utf-8" };
 const send = (res, code, body, type = "application/json; charset=utf-8") => { res.writeHead(code, { "content-type": type, "cache-control": "no-store" }); res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body)); };
@@ -257,6 +277,7 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === "GET" && (p === "/" || p === "/index.html")) return send(res, 200, readFileSync(join(ROOT, "ui", "index.html")), MIME[".html"]);
     if (TOKEN && p.startsWith("/api/") && p !== "/api/health" && url.searchParams.get("token") !== TOKEN) return send(res, 401, { error: "missing or wrong token" });
+    if (p === "/api/logins") return send(res, 200, await checkLogins(url.searchParams.has("refresh")));
     if (p === "/api/health") return send(res, 200, { ok: true, has_dist: existsSync(join(ROOT, "dist", "cli.js")), has_research: existsSync(RESEARCH), has_profile: existsSync(join(ROOT, "user_profile.json")), has_env: existsSync(join(ROOT, ".env")) });
     if (p === "/api/parse") return send(res, 200, parseAsk(url.searchParams.get("ask")));
     if (req.method === "POST" && p === "/api/run") {
