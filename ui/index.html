@@ -864,7 +864,7 @@ function onFinding(ev){
   d.innerHTML = `${ev.label ? `<span class="k">${esc(ev.label)}</span>` : ''}<div class="v">${ev.date ? `<span class="when">${esc(ev.date)}</span>` : ''}<div class="claim">${esc(ev.claim.replace(/ \(sample\)$/, ''))}</div>${host ? `<a class="src" href="${esc(ev.source_url)}" target="_blank" rel="noopener">${esc(host)} ↗</a>` : `<span class="src">${esc(ev.via)}</span>`}</div>`;
   const order = ['Role','Built','Talks about','Circle'], o = order.indexOf(ev.label); // tracks finish in any order
   d.dataset.o = ev.ts ? -ev.ts : o < 0 ? 99 : o;
-  if(ev.ts >= 202611111800) d.classList.add('soon'); // shortcut: demo 'today' is fixed to Nov 11, 2026
+  const n0 = new Date(); if(ev.section === 'now' && ev.ts >= n0.getFullYear()*1e8 + (n0.getMonth()+1)*1e6 + n0.getDate()*1e4) d.classList.add('soon'); // today or later
   box.insertBefore(d, [...box.children].find(c => +c.dataset.o > +d.dataset.o) || null);
 }
 

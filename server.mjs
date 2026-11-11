@@ -105,6 +105,20 @@ const sid = (s) => { let h = 0; for (const c of s) h = (h * 31 + c.codePointAt(0
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 const DIM_LABEL = { web: "Web", podcast: "Talks about", x: "X", linkedin: "LinkedIn", instagram: "Instagram", email: "Email" };
 
+// "2025-05" / "2026-11-09" / "2026-11-11T22:45" -> { date: "May 2025" | "Nov 9" | "Today · 22:45", ts: 202611112245 } for the timeline
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function dateOf(iso, now = new Date()) {
+  const m = String(iso || "").match(/^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?(?:[T ](\d{2}):(\d{2}))?/);
+  if (!m) return {};
+  const [y, mo, d, hh, mm] = m.slice(1).map((v) => (v === undefined ? undefined : +v));
+  const ts = y * 1e8 + (mo || 1) * 1e6 + (d || 1) * 1e4 + (hh || 0) * 100 + (mm || 0);
+  const time = hh === undefined ? "" : ` · ${m[4]}:${m[5]}`;
+  let date = String(y);
+  if (mo && !d) date = `${MON[mo - 1]} ${y}`;
+  else if (d) date = y === now.getFullYear() && mo === now.getMonth() + 1 && d === now.getDate() ? `Today${time}` : `${MON[mo - 1]} ${d}${y === now.getFullYear() ? "" : `, ${y}`}${time}`;
+  return { date, ts };
+}
+
 function findingEvents(research) {
   const evs = [], per = { persona: 0, now: 0, prec: 0 };
   for (const f of research.findings || []) {
@@ -112,7 +126,8 @@ function findingEvents(research) {
     const section = dim === "precedent" ? "prec" : f.step === 2 || ["mention", "event", "booking"].includes(dim) ? "now" : "persona";
     if (per[section]++ >= 14) continue;
     const label = section === "persona" ? (f.kind === "bio" ? "Role" : DIM_LABEL[dim] || "") : "";
-    evs.push({ type: "finding", section, label, claim: f.quote ? `${f.claim} “${String(f.quote).slice(0, 160)}”` : f.claim, source_url: f.source_url });
+    const when = section === "persona" ? {} : dateOf(f.date);
+    evs.push({ type: "finding", section, label, ...when, claim: f.quote ? `${f.claim} “${String(f.quote).slice(0, 160)}”` : f.claim, source_url: f.source_url });
   }
   return evs;
 }
@@ -274,4 +289,4 @@ const server = createServer(async (req, res) => {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   server.listen(PORT, "127.0.0.1", () => console.log(`Meetble is running: open http://localhost:${PORT}`));
 }
-export { server, toUiAction, findingEvents };
+export { server, toUiAction, findingEvents, dateOf };
