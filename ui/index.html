@@ -503,6 +503,23 @@ button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(
 .login-note.bad{color:#C0392B}
 .login-note.ok{color:var(--ok)}
 .login-note .try{margin-left:6px}
+/* cloud mode: Google sign-in, account chip, connect + profile dialogs */
+.me-chip{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted)}
+.me-chip img,.me-chip .av{width:26px;height:26px;border-radius:50%;background:var(--soft);display:grid;place-items:center;font-size:11px}
+.gate{position:fixed;inset:0;z-index:50;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px)}
+.gate .card,.dlg{padding:28px 30px;max-width:420px;width:calc(100% - 40px)}
+.gate h2,.dlg h2{margin:0 0 6px;font-size:22px;letter-spacing:-.02em}
+.gate p,.dlg p{color:var(--muted);margin:0 0 18px}
+.gate .err,.dlg .err{color:#C2410C;font-size:13px;margin-top:12px}
+.dlg{border:1px solid var(--line);border-radius:20px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.dlg::backdrop{background:rgba(0,0,0,.35);backdrop-filter:blur(4px)}
+.dlg label{display:block;font-size:12.5px;color:var(--muted);margin:12px 0 4px}
+.dlg input,.dlg textarea{width:100%;box-sizing:border-box;font:inherit;font-size:13.5px;padding:10px 14px;border-radius:12px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.dlg textarea{min-height:70px;resize:vertical}
+.dlg small{display:block;color:var(--faint);font-size:11.5px;margin-top:4px;line-height:1.45}
+.dlg .row{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+.dlg .row .tbtn.primary{background:var(--ink);color:var(--bg)}
+.dlg .row .danger{margin-right:auto;color:#C2410C}
 </style>
 </head>
 <body>
@@ -512,7 +529,57 @@ button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(
 
 <header class="top">
   <button class="brand" id="homeBtn" type="button" title="Start over" aria-label="Meetble, start over"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.6 2.2"/><circle cx="9" cy="9" r="2.6" fill="currentColor"/></svg>Meetble</button>
+  <div class="me-chip" id="meChip" hidden>
+    <button class="tbtn" id="profileBtn" type="button">My profile</button>
+    <span id="meName"></span><span class="av" id="meAv"></span>
+    <button class="tbtn" id="logoutBtn" type="button">Sign out</button>
+  </div>
 </header>
+
+<div class="gate" id="gate" hidden>
+  <div class="card">
+    <h2>Sign in to Meetble</h2>
+    <p>Your account keeps your profile and your LinkedIn, X and Luma connections, so every run researches as you.</p>
+    <div id="gsiBtn"></div>
+    <div class="err" id="gateErr"></div>
+  </div>
+</div>
+
+<dialog class="dlg" id="connDlg">
+  <form method="dialog" id="connForm">
+    <h2 id="connTitle">Connect</h2>
+    <p id="connLead">Saved to your Meetble account, so research can use this site signed in as you.</p>
+    <label for="connUrl" id="connUrlLbl">Your profile</label>
+    <input id="connUrl" autocomplete="off">
+    <label for="connCookie">Session cookie <span id="connCookieName" class="mono"></span></label>
+    <input id="connCookie" type="password" autocomplete="off" placeholder="paste the value (leave empty to keep the saved one)">
+    <small id="connHow"></small>
+    <div class="err" id="connErr"></div>
+    <div class="row">
+      <button class="tbtn danger" id="connDel" type="button">Disconnect</button>
+      <button class="tbtn" value="cancel" formnovalidate>Cancel</button>
+      <button class="tbtn primary" id="connSave" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog class="dlg" id="profDlg">
+  <form method="dialog" id="profForm">
+    <h2>My profile</h2>
+    <p>Meetble uses this to write outreach that sounds like you and to find what you can offer.</p>
+    <label for="pName">Name</label><input id="pName">
+    <label for="pRole">Role</label><input id="pRole" placeholder="Founder, Acme">
+    <label for="pLoc">Location</label><input id="pLoc" placeholder="Taipei">
+    <label for="pBg">Background (one per line)</label><textarea id="pBg"></textarea>
+    <label for="pOffer">What you can offer people (one per line)</label><textarea id="pOffer"></textarea>
+    <label for="pLook">What you're looking for (one per line)</label><textarea id="pLook"></textarea>
+    <div class="err" id="profErr"></div>
+    <div class="row">
+      <button class="tbtn" value="cancel" formnovalidate>Cancel</button>
+      <button class="tbtn primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
 
 <main id="intro">
   <div class="orb-wrap"><canvas id="bigOrb" aria-hidden="true"></canvas></div>
@@ -944,6 +1011,11 @@ function acctMode(a){
 }
 function acctStatus(a){
   const m = acctMode(a);
+  if(LIVE && CLOUD && LOGIN_URL[a.key]){
+    const c = ME?.connections?.[a.key];
+    if(c?.has_session) return a.on ? 'Connected' : 'Not used · click to edit';
+    return c?.url || c?.handle ? 'Profile saved · add sign-in' : 'Not connected · Connect';
+  }
   if(LIVE && LOGIN_URL[a.key]){
     if(m === 'chk') return 'Checking…';
     if(m === 'ok') return 'Connected';
@@ -984,6 +1056,7 @@ async function refreshLogins(force, quiet){
   if(r.error) setLoginNote('Couldn\'t check sign-ins. ' + r.error, 'bad');
   else if(!out.length) setLoginNote('All set: ' + on.join(', ') + ' connected.', 'ok');
   else if(pendingLogin && !r.sites?.[pendingLogin]?.logged_in) setLoginNote('Waiting for you to sign in to ' + acctName(pendingLogin) + ' in the other tab. This card turns green by itself when you\'re signed in.');
+  else if(CLOUD) setLoginNote((on.length ? on.join(', ') + ' connected. ' : '') + 'Click ' + out.join(' or ') + ' to connect it to your account. It stays saved for your next runs.');
   else setLoginNote((on.length ? on.join(', ') + ' connected. ' : '') + 'Click ' + out.join(' or ') + ' to sign in. It opens in a new tab; come back to this tab when you\'re done and it updates by itself.');
   $('#recheckBtn').hidden = false;
   renderAccts();
@@ -1009,6 +1082,7 @@ $('#accts').addEventListener('click', e => {
   const b = e.target.closest('.acct'); if(!b) return;
   const a = ACCTS.find(x => x.key === b.dataset.k);
   if(LIVE && LOGIN_URL[a.key] && loginState === 'checking') return;
+  if(LIVE && CLOUD && LOGIN_URL[a.key]){ openConnect(a.key); return; }
   if(LIVE && LOGIN_URL[a.key] && !a.on && acctMode(a) !== 'off'){
     // You sign in yourself in a NEW tab (we never see the password); this tab stays here, and the card turns green when you come back.
     pendingLogin = a.key; window.open(LOGIN_URL[a.key], '_blank', 'noopener'); renderAccts();
@@ -1036,6 +1110,87 @@ function submitAsk(){
 $('#goBtn').addEventListener('click', () => {
   document.body.className = 's-run'; scrollTo(0,0); LIVE ? runLive() : run(); });
 
+/* ---------- cloud mode: Google sign-in; each account saves its profile and site connections (server.mjs + accounts.mjs) ---------- */
+var CLOUD = false, GOOGLE_ID = '', ME = null; // var: renderAccts() runs before this line
+const CONNECT_HOW = {
+  linkedin: 'In Chrome, signed in to LinkedIn: DevTools (F12) → Application → Cookies → https://www.linkedin.com → copy the value of li_at.',
+  x: 'In Chrome, signed in to X: DevTools (F12) → Application → Cookies → https://x.com → copy the value of auth_token.',
+  luma: 'In Chrome, signed in to Luma: DevTools (F12) → Application → Cookies → https://luma.com → copy the value of luma.auth-session-key.',
+  instagram: 'In Chrome, signed in to Instagram: DevTools (F12) → Application → Cookies → https://www.instagram.com → copy the value of sessionid.',
+};
+function showMe(u){
+  ME = u; $('#meChip').hidden = !u; if(!u) return;
+  $('#meName').textContent = u.email;
+  $('#meAv').innerHTML = u.picture ? `<img src="${u.picture}" alt="" referrerpolicy="no-referrer">` : (u.name || '?')[0].toUpperCase();
+}
+async function signIn(){
+  const r = await fetch(q('/api/me'));
+  if(r.ok){ showMe(await r.json()); return; }
+  $('#gate').hidden = false;
+  await new Promise(res => { const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.onload = res; s.onerror = res; document.head.appendChild(s); });
+  if(!window.google?.accounts?.id){ $('#gateErr').textContent = 'Couldn\'t load Google sign-in. Check your connection and reload.'; return new Promise(() => {}); }
+  return new Promise(done => {
+    google.accounts.id.initialize({ client_id: GOOGLE_ID, callback: async ({credential}) => {
+      $('#gateErr').textContent = '';
+      const r = await fetch(q('/api/auth/google'), {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({credential})});
+      const u = await r.json().catch(() => ({}));
+      if(!r.ok){ $('#gateErr').textContent = u.error || 'Sign-in failed'; return; }
+      $('#gate').hidden = true; showMe(u); done();
+    }});
+    google.accounts.id.renderButton($('#gsiBtn'), {theme:'outline', size:'large', shape:'pill', text:'continue_with'});
+    google.accounts.id.prompt();
+  });
+}
+$('#logoutBtn').addEventListener('click', async () => { await fetch(q('/api/auth/logout'), {method:'POST'}); location.reload(); });
+let connSite = null;
+function openConnect(k){
+  connSite = k; const a = ACCTS.find(x => x.key === k), c = ME?.connections?.[k] || {};
+  const handleSite = k === 'x' || k === 'instagram';
+  $('#connTitle').textContent = (c.has_session ? '' : 'Connect ') + a.nm;
+  $('#connUrlLbl').textContent = handleSite ? 'Your handle' : 'Your profile URL';
+  $('#connUrl').placeholder = ME?.sites?.[k]?.hint || '';
+  $('#connUrl').value = (handleSite ? (c.handle && '@' + c.handle) : c.url) || '';
+  $('#connCookieName').textContent = '(' + (ME?.sites?.[k]?.cookie || '') + ')' + (c.has_session ? ' · saved' : '');
+  $('#connCookie').value = '';
+  $('#connHow').textContent = CONNECT_HOW[k] + ' It is stored encrypted and only used by the server\'s browser for your runs. Disconnect deletes it.';
+  $('#connDel').hidden = !(c.has_session || c.url || c.handle);
+  $('#connErr').textContent = '';
+  $('#connDlg').showModal();
+}
+async function saveMe(path, method, body){
+  const r = await fetch(q(path), {method, headers:{'content-type':'application/json'}, body: body && JSON.stringify(body)});
+  const u = await r.json().catch(() => ({}));
+  if(!r.ok) throw new Error(u.error || 'Save failed');
+  showMe(u); await refreshLogins(true); return u;
+}
+$('#connForm').addEventListener('submit', async e => {
+  if(e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const k = connSite, v = $('#connUrl').value.trim(), body = (k === 'x' || k === 'instagram') ? {handle: v} : {url: v};
+  if($('#connCookie').value.trim()) body.cookie = $('#connCookie').value.trim();
+  try{ await saveMe('/api/me/connections/' + k, 'PUT', body); $('#connDlg').close(); }catch(err){ $('#connErr').textContent = err.message; }
+});
+$('#connDel').addEventListener('click', async () => {
+  try{ await saveMe('/api/me/connections/' + connSite, 'DELETE'); $('#connDlg').close(); }catch(err){ $('#connErr').textContent = err.message; }
+});
+const lines = v => Array.isArray(v) ? v.join('\n') : (v || '');
+$('#profileBtn').addEventListener('click', () => {
+  const p = ME?.profile || {};
+  $('#pName').value = p.name || ''; $('#pRole').value = p.role || ''; $('#pLoc').value = p.location || '';
+  $('#pBg').value = lines(p.background); $('#pOffer').value = lines(p.offer_inventory_draft); $('#pLook').value = lines(p.looking_for);
+  $('#profErr').textContent = ''; $('#profDlg').showModal();
+});
+$('#profForm').addEventListener('submit', async e => {
+  if(e.submitter?.value !== 'save') return;
+  e.preventDefault();
+  const split = v => v.split(/\n+/).map(s => s.trim()).filter(Boolean);
+  try{
+    await saveMe('/api/me/profile', 'PUT', { name: $('#pName').value.trim(), role: $('#pRole').value.trim(), location: $('#pLoc').value.trim(),
+      background: split($('#pBg').value), offer_inventory_draft: split($('#pOffer').value), looking_for: split($('#pLook').value) });
+    $('#profDlg').close();
+  }catch(err){ $('#profErr').textContent = err.message; }
+});
+
 /* ---------- live mode: served by server.mjs, runs the real pipeline. Opened as a file (or ?demo=1) it plays the sample run. ---------- */
 var LIVE = false, es = null; // var: renderAccts() runs before this line
 // Served by server.mjs: same origin. Hosted (GitHub Pages): talk to the server on this computer, http://localhost:8787 (or ?api=...).
@@ -1045,12 +1200,17 @@ const TOK = QS.get('token') ? 'token=' + encodeURIComponent(QS.get('token')) : '
 const q = path => API + path + (TOK ? (path.includes('?') ? '&' : '?') + TOK : '');
 (async () => {
   if(QS.has('demo')) { $('#modeNote').textContent = 'Demo mode: sample data, nothing is sent.'; return; }
+  if(location.protocol.startsWith('http')){
+    try{ const c = await (await fetch(q('/api/config'))).json(); CLOUD = !!c.cloud; GOOGLE_ID = c.google_client_id || ''; }catch{}
+    if(CLOUD) await signIn();
+  }
   const OFF = 'Not connected. Open the URL that start-gmi.sh prints (http://<server IP>:8787/?token=…), or run node server.mjs on this computer and open http://localhost:8787.';
   if(!location.protocol.startsWith('http')) { $('#modeNote').textContent = OFF; return; }
   try{
     const h = await (await fetch(q('/api/health'))).json(); LIVE = true;
     const miss = [!h.has_dist && 'dist/ (run npm run build)', !h.has_env && '.env', !h.has_profile && 'user_profile.json'].filter(Boolean);
-    $('#modeNote').textContent = 'Live mode: runs the real research on this computer.' + (miss.length ? ' Missing: ' + miss.join(', ') : '');
+    $('#modeNote').textContent = CLOUD ? 'Live: runs the real research on the Meetble server, signed in to the sites you connect below.'
+      : 'Live mode: runs the real research on this computer.' + (miss.length ? ' Missing: ' + miss.join(', ') : '');
     $('#dReuse').disabled = !h.has_research;
     $('#recheckBtn').hidden = false; refreshLogins(false);
   }catch{ $('#modeNote').textContent = OFF; }
@@ -1067,8 +1227,12 @@ async function runLive(){
   const body = { ask: $('#saidText').textContent, hint: $('#dHint').value.trim(), x_handle: $('#dX').value.trim(),
     event_urls: $('#dEvent').value.trim() ? [$('#dEvent').value.trim()] : [], reuse: $('#dReuse').checked };
   let id;
-  try{ id = (await (await fetch(q('/api/run'), {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)})).json()).id; }
-  catch(e){ setState('Could not reach the local server', 'idle'); liveStop('Stopped'); return; }
+  try{
+    const r = await fetch(q('/api/run'), {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)});
+    const d = await r.json(); id = d.id;
+    if(!r.ok){ setState(d.error || 'The server refused the run', 'idle'); liveStop('Stopped'); return; }
+  }
+  catch(e){ setState(CLOUD ? 'Could not reach the Meetble server' : 'Could not reach the local server', 'idle'); liveStop('Stopped'); return; }
   es?.close(); es = new EventSource(q('/api/stream?id=' + id));
   es.onmessage = m => {
     if(my !== runId){ es.close(); return; }

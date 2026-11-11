@@ -6,9 +6,11 @@
 // Each stdout checklist line ("ICON label (note)") becomes a UI event, streamed to the browser over SSE.
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createAccounts, httpError } from "./accounts.mjs";
+import { launchSignedInChrome } from "./cloud_browser.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT) || 8787;
@@ -18,6 +20,19 @@ const PY = process.env.PYTHON || (process.platform === "win32" ? "python" : "pyt
 const OUT = join(ROOT, "out");
 const RESEARCH = join(OUT, "research.json");
 const PLAN = join(OUT, "plan.json");
+
+// ---------- cloud mode: anyone signs in with Google; each account keeps its own runs, profile and site sign-ins ----------
+// Turned on by GOOGLE_CLIENT_ID (see DEPLOY.md). Without it, this is the single-user local app, unchanged.
+const CLOUD = !!process.env.GOOGLE_CLIENT_ID;
+const DATA = process.env.MEETBLE_DATA || join(ROOT, "data");
+const MAX_RUNS = Number(process.env.MEETBLE_MAX_RUNS) || 3; // runs at once across all accounts (they share the server's API keys)
+const accounts = CLOUD ? createAccounts({ dataDir: DATA, clientId: process.env.GOOGLE_CLIENT_ID, secret: process.env.MEETBLE_SECRET, allow: process.env.MEETBLE_ALLOWED_EMAILS }) : null;
+function pathsFor(owner) {
+  if (!CLOUD) return { out: OUT, research: RESEARCH, plan: PLAN, profile: join(ROOT, "user_profile.json") };
+  const out = join(DATA, "runs", owner);
+  mkdirSync(out, { recursive: true });
+  return { out, research: join(out, "research.json"), plan: join(out, "plan.json"), profile: join(out, "user_profile.json") };
+}
 
 // ---------- the ask: "Meet Boris Jabes before 22:45 tonight, in person. Budget ¥30,000." ----------
 const ymd = (d) => d.toLocaleDateString("en-CA"); // local YYYY-MM-DD
@@ -177,16 +192,18 @@ function toUiAction(a) {
 }
 
 // ---------- jobs ----------
-let job = null;
+const jobs = new Map(); // owner ("local", or the Google account id in cloud mode) -> the latest run
 
-function startJob(body) {
-  if (job && !job.done) stopJob();
+function startJob(body, owner = "local", user = null) {
+  const prev = jobs.get(owner);
+  if (prev && !prev.done) stopJob(owner);
+  if ([...jobs.values()].filter((x) => !x.done).length >= MAX_RUNS) throw httpError(429, `The server is busy (${MAX_RUNS} runs going). Try again in a few minutes.`);
   const ask = parseAsk(body.ask);
   if (body.name) ask.name = String(body.name).trim();
-  const j = { id: Date.now().toString(36), events: [], clients: new Set(), done: false, child: null, ask };
-  job = j;
+  const j = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), events: [], clients: new Set(), done: false, child: null, ask, owner, user, paths: pathsFor(owner), cleanup: [] };
+  jobs.set(owner, j);
   const push = (ev) => {
-    if (job !== j) return;
+    if (jobs.get(owner) !== j) return;
     j.events.push(ev);
     for (const c of j.clients) c.write(`data: ${JSON.stringify(ev)}\n\n`);
     // Close the streams after "end": clients that don't close on their own (curl, proxies) would otherwise hang.
@@ -194,14 +211,16 @@ function startJob(body) {
   };
   j.push = push;
   run(j, body).catch((e) => push({ type: "step", id: "fatal", group: G[0], label: "The run stopped", status: "none", note: String(e?.message || e).slice(0, 200) }))
-    .finally(() => { j.done = true; push({ type: "end" }); });
+    .finally(() => { j.done = true; for (const f of j.cleanup) { try { f(); } catch {} } push({ type: "end" }); });
   return j;
 }
 
-function stopJob() {
+function stopJob(owner = "local") {
+  const job = jobs.get(owner);
   if (!job) return;
   try { job.child?.kill(); } catch {}
   job.done = true;
+  for (const f of job.cleanup.splice(0)) { try { f(); } catch {} }
 }
 
 function runProc(j, cmd, args, env, onLine) {
@@ -242,8 +261,33 @@ function stepHandler(j, groupFor) {
   };
 }
 
+/** Cloud mode: the person's profile file, and a headless Chrome signed in with their saved sessions (if any). */
+async function cloudSetup(j) {
+  const u = j.user, env = {};
+  writeFileSync(j.paths.profile, JSON.stringify(accounts.profileJson(u), null, 2), "utf8");
+  const cookies = accounts.browserCookies(u);
+  if (!cookies.length || process.env.MEETBLE_BROWSER === "0") {
+    env.MEETBLE_BROWSER = "0";
+    j.push({ type: "step", id: "cloudbrowser", group: G[0], label: "Browser research", status: "none", note: cookies.length ? "off on this server" : "no saved sign-ins (connect LinkedIn / X / Luma on the account cards)" });
+    return env;
+  }
+  try {
+    const chrome = await launchSignedInChrome(cookies);
+    j.cleanup.push(chrome.close);
+    env.MEETBLE_CDP_URL = chrome.url;
+    env.MEETBLE_CDP_WAIT = "20"; // no Allow prompt on a server Chrome
+    j.push({ type: "step", id: "cloudbrowser", group: G[0], label: "Browser research", status: "done", note: `server Chrome signed in to ${[...new Set(cookies.map((c) => c.domain.replace(/^\./, "")))].join(", ")}` });
+  } catch (e) {
+    env.MEETBLE_BROWSER = "0";
+    j.push({ type: "step", id: "cloudbrowser", group: G[0], label: "Browser research", status: "none", note: String(e?.message || e).slice(0, 160) });
+  }
+  return env;
+}
+
 async function run(j, body) {
   const { push, ask } = j;
+  const { research: RESEARCH, plan: PLAN } = j.paths;
+  const env = CLOUD ? await cloudSetup(j) : {};
   push({ type: "meta", name: ask.name, deadline: ask.deadline, deadline_label: ask.deadline_label, budget_jpy: ask.budget_jpy });
   if (!ask.name) throw new Error("Couldn't find a name in that. Try: Meet Boris Jabes before Friday");
 
@@ -254,10 +298,11 @@ async function run(j, body) {
   } else {
     if (!existsSync(join(ROOT, "dist", "cli.js"))) throw new Error("dist/cli.js is missing. Run: npm install, then npm run build");
     const args = [join(ROOT, "dist", "cli.js"), ask.name, "--deadline", ask.deadline, "--out", RESEARCH];
+    if (CLOUD) args.push("--profile", j.paths.profile);
     if (body.hint) args.push("--hint", String(body.hint));
     if (body.x_handle) args.push("--x-handle", String(body.x_handle).replace(/^@/, ""));
     for (const u of [].concat(body.event_urls || []).filter(Boolean)) args.push("--event-url", String(u));
-    const r = await runProc(j, process.execPath, args, {}, stepHandler(j, researchGroup));
+    const r = await runProc(j, process.execPath, args, env, stepHandler(j, researchGroup));
     if (j.done) return;
     if (r.code !== 0 || !existsSync(RESEARCH)) throw new Error(`Research failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no output"}`);
   }
@@ -270,7 +315,7 @@ async function run(j, body) {
   research.goal = { ...(research.goal || {}), meet: ask.meet, ...(ask.budget_jpy ? { budget_jpy: ask.budget_jpy } : {}) };
   writeFileSync(RESEARCH, JSON.stringify(research, null, 2), "utf8");
   const pargs = ["-m", "plan", RESEARCH, "--out", PLAN, "--no-interview"];
-  if (existsSync(join(ROOT, "user_profile.json"))) pargs.push("--profile", join(ROOT, "user_profile.json"));
+  if (existsSync(j.paths.profile)) pargs.push("--profile", j.paths.profile);
   const mtime = () => (existsSync(PLAN) ? statSync(PLAN).mtimeMs : 0), before = mtime();
   const r = await runProc(j, PY, pargs, { PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }, stepHandler(j, () => G[5]));
   if (j.done) return;
@@ -367,6 +412,11 @@ async function checkLogins(force) {
 
 // ---------- http ----------
 const MIME = { ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8", ".md": "text/markdown; charset=utf-8" };
+async function readJson(req) {
+  let raw = "";
+  for await (const c of req) { raw += c; if (raw.length > 200_000) throw httpError(413, "request too large"); }
+  try { return JSON.parse(raw || "{}"); } catch { throw httpError(400, "bad JSON"); }
+}
 const send = (res, code, body, type = "application/json; charset=utf-8") => { res.writeHead(code, { "content-type": type, "cache-control": "no-store" }); res.end(typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body)); };
 
 const server = createServer(async (req, res) => {
@@ -383,17 +433,39 @@ const server = createServer(async (req, res) => {
   if (req.method === "OPTIONS") { res.writeHead(204); return res.end(); }
   try {
     if (req.method === "GET" && (p === "/" || p === "/index.html")) return send(res, 200, readFileSync(join(ROOT, "ui", "index.html")), MIME[".html"]);
-    if (TOKEN && p.startsWith("/api/") && p !== "/api/health" && url.searchParams.get("token") !== TOKEN) return send(res, 401, { error: "missing or wrong token" });
+    if (p === "/api/config") return send(res, 200, { cloud: CLOUD, google_client_id: process.env.GOOGLE_CLIENT_ID || "" });
+    let user = null, owner = "local";
+    if (CLOUD && p.startsWith("/api/")) {
+      const secure = req.headers["x-forwarded-proto"] === "https" || !!req.socket.encrypted;
+      if (req.method === "POST" && p === "/api/auth/google") {
+        const g = await accounts.verifyGoogle((await readJson(req)).credential);
+        const u = accounts.upsert(g);
+        res.setHeader("set-cookie", accounts.cookieHeader(accounts.issue(u.sub), secure));
+        return send(res, 200, accounts.publicUser(u));
+      }
+      if (req.method === "POST" && p === "/api/auth/logout") { res.setHeader("set-cookie", accounts.cookieHeader("", secure, 0)); return send(res, 200, { ok: true }); }
+      user = accounts.userFromCookie(req.headers.cookie);
+      if (!user && p !== "/api/health") return send(res, 401, { error: "Sign in with Google first", signin: true });
+      owner = user?.sub || "local";
+      if (p === "/api/me" && req.method === "GET") return send(res, 200, accounts.publicUser(user));
+      if (p === "/api/me/profile" && req.method === "PUT") return send(res, 200, accounts.setProfile(user.sub, await readJson(req)));
+      const cm = p.match(/^\/api\/me\/connections\/([a-z]+)$/);
+      if (cm && req.method === "PUT") return send(res, 200, accounts.setConnection(user.sub, cm[1], await readJson(req)));
+      if (cm && req.method === "DELETE") return send(res, 200, accounts.removeConnection(user.sub, cm[1]));
+      if (p === "/api/logins/phase") return send(res, 200, { phase: "idle" });
+      if (p === "/api/logins") return send(res, 200, { ...accounts.loginsFor(user), checked_at: new Date().toISOString() });
+    } else if (TOKEN && p.startsWith("/api/") && p !== "/api/health" && url.searchParams.get("token") !== TOKEN) return send(res, 401, { error: "missing or wrong token" });
+    const paths = CLOUD && user ? pathsFor(owner) : pathsFor("local");
+    const job = jobs.get(owner);
     if (p === "/api/logins/phase") return send(res, 200, { phase: loginPhase });
     if (p === "/api/logins") return send(res, 200, await checkLogins(url.searchParams.has("refresh")));
-    if (p === "/api/health") return send(res, 200, { ok: true, has_dist: existsSync(join(ROOT, "dist", "cli.js")), has_research: existsSync(RESEARCH), has_profile: existsSync(join(ROOT, "user_profile.json")), has_env: existsSync(join(ROOT, ".env")) });
+    if (p === "/api/health") return send(res, 200, { ok: true, cloud: CLOUD, has_dist: existsSync(join(ROOT, "dist", "cli.js")), has_research: existsSync(paths.research), has_profile: CLOUD ? !!user : existsSync(paths.profile), has_env: CLOUD || existsSync(join(ROOT, ".env")) });
     if (p === "/api/parse") return send(res, 200, parseAsk(url.searchParams.get("ask")));
     if (req.method === "POST" && p === "/api/run") {
-      let raw = ""; for await (const c of req) raw += c;
-      const j = startJob(JSON.parse(raw || "{}"));
+      const j = startJob(await readJson(req), owner, user);
       return send(res, 200, { id: j.id, ask: j.ask });
     }
-    if (req.method === "POST" && p === "/api/stop") { stopJob(); return send(res, 200, { ok: true }); }
+    if (req.method === "POST" && p === "/api/stop") { stopJob(owner); return send(res, 200, { ok: true }); }
     if (p === "/api/stream") {
       if (!job || job.id !== url.searchParams.get("id")) return send(res, 404, { error: "no such run" });
       res.writeHead(200, { "content-type": "text/event-stream; charset=utf-8", "cache-control": "no-store", connection: "keep-alive" });
@@ -404,11 +476,14 @@ const server = createServer(async (req, res) => {
       req.on("close", () => j.clients.delete(res));
       return;
     }
-    const f = { "/out/plan.md": join(OUT, "plan.md"), "/out/plan.json": PLAN, "/out/research.json": RESEARCH }[p];
+    if (CLOUD && p.startsWith("/out/") && !user) user = accounts.userFromCookie(req.headers.cookie);
+    if (CLOUD && p.startsWith("/out/") && !user) return send(res, 401, { error: "Sign in with Google first" });
+    const op = pathsFor(CLOUD ? user.sub : "local");
+    const f = { "/out/plan.md": join(op.out, "plan.md"), "/out/plan.json": op.plan, "/out/research.json": op.research }[p];
     if (f) return existsSync(f) ? send(res, 200, readFileSync(f), MIME[f.slice(f.lastIndexOf("."))]) : send(res, 404, { error: "not yet" });
     send(res, 404, { error: "not found" });
   } catch (e) {
-    send(res, 500, { error: String(e?.message || e) });
+    send(res, e?.status || 500, { error: String(e?.message || e) });
   }
 });
 

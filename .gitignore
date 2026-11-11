@@ -30,3 +30,6 @@ dist/
 
 # Personal profile (contains private notes)
 user_profile.json
+
+# Cloud mode account data (local runs of GOOGLE_CLIENT_ID mode)
+data/
