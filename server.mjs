@@ -185,7 +185,13 @@ function startJob(body) {
   if (body.name) ask.name = String(body.name).trim();
   const j = { id: Date.now().toString(36), events: [], clients: new Set(), done: false, child: null, ask };
   job = j;
-  const push = (ev) => { if (job !== j) return; j.events.push(ev); for (const c of j.clients) c.write(`data: ${JSON.stringify(ev)}\n\n`); };
+  const push = (ev) => {
+    if (job !== j) return;
+    j.events.push(ev);
+    for (const c of j.clients) c.write(`data: ${JSON.stringify(ev)}\n\n`);
+    // Close the streams after "end": clients that don't close on their own (curl, proxies) would otherwise hang.
+    if (ev.type === "end") { for (const c of j.clients) c.end(); j.clients.clear(); }
+  };
   j.push = push;
   run(j, body).catch((e) => push({ type: "step", id: "fatal", group: G[0], label: "The run stopped", status: "none", note: String(e?.message || e).slice(0, 200) }))
     .finally(() => { j.done = true; push({ type: "end" }); });
