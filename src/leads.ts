@@ -38,6 +38,9 @@ export interface LiveAction {
   fits_deadline: boolean;
 }
 
+/** plan/step5_actions.py UNVERIFIED_BOOKING_CAP: a booking page with no confirmed open slots. */
+const UNVERIFIED_BOOKING_CAP = 0.05;
+
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s);
 
 /** Returns the actions one finding opens up (often none). Pure: the caller dedupes and emits. */
@@ -46,7 +49,7 @@ export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAct
   const d = (f.data ?? {}) as Record<string, unknown>;
   const mk = (type: LeadType, title: string, how: string[], url: string, cost: number | null, hours: number, days: number, why: string, contact?: string, eventDate?: string | null) => ({
     type, title, how, channel_url: url, p: BASE_LOW[type], cost_jpy: cost, hours, days_to_outcome: days,
-    reasons: { base_rate: `${why} (provisional: lowest typical rate for this route, not yet weighed)` }, evidence: [f.id],
+    reasons: { base_rate: `${why} (provisional: lowest typical rate for this route, not yet weighed)` } as Record<string, string>, evidence: [f.id],
     from_kind: f.kind, ...(contact ? { contact } : {}), ...(eventDate !== undefined ? { event_date: eventDate } : {}),
   });
   switch (f.kind) {
@@ -69,11 +72,20 @@ export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAct
       return [mk("event", `Meet ${first} at ${clip(f.claim.replace(/^.*?"(.*)".*$/, "$1"), 70)}`,
         ["Register (or confirm you're registered)", `Prepare a one-line opener tied to what ${first} is speaking about`, "Find them right after their session"],
         f.source_url, 0, 2, 1, f.claim, undefined, typeof d.event_date === "string" ? d.event_date : null)];
-    case "booking_page":
+    case "booking_page": {
       if (d.profile_active === false) return []; // the live check found the profile inactive; unknown stays a route
-      return [mk("booking_page", `Book time with ${first} through their booking page`,
+      // Same rule as Step 5: a page with no confirmed open slots is "unverified" and capped at 5%
+      // (a page that exists may be unused).
+      const verified = d.live === true || d.slots_confirmed === true;
+      const a = mk("booking_page", `Book time with ${first} through their booking page${verified ? "" : " (unverified page)"}`,
         ["Open the page and check for open slots", "Pick the earliest slot and write a one-line agenda"],
-        f.source_url, 0, 0.2, 2, f.claim)];
+        f.source_url, 0, 0.2, 2, f.claim);
+      if (!verified) {
+        a.p = Math.min(a.p, UNVERIFIED_BOOKING_CAP);
+        a.reasons = { ...a.reasons, unverified: "No open slots confirmed yet, so this page may be unused: capped at 5% until checked" };
+      }
+      return [a];
+    }
     case "paid_consult_page":
       return [mk("paid_consult", `Book a paid call with ${first}`,
         ["Open the page and check the price and next slot", "Book with a specific question"],
@@ -97,7 +109,7 @@ export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAct
   }
 }
 
-/** Dedupes by type+url+title, caps posts and inner-circle cards so the deck stays useful, assigns ids. */
+/** Dedupes by type+title, caps posts and inner-circle cards so the deck stays useful, assigns ids. */
 export class LiveActions {
   private seen = new Set<string>();
   private perType = new Map<string, number>();
@@ -111,7 +123,8 @@ export class LiveActions {
 
   consider(f: Finding): void {
     for (const a of actionsFromFinding(f, this.targetName())) {
-      const key = `${a.type}|${a.channel_url}|${a.title}`.toLowerCase();
+      // By type+title: two sources for the same advice (e.g. two precedent write-ups) are one card.
+      const key = `${a.type}|${a.title}`.toLowerCase();
       if (this.seen.has(key)) continue;
       const n = this.perType.get(a.from_kind) ?? 0;
       if (n >= (LiveActions.CAP[a.from_kind] ?? 3)) continue;

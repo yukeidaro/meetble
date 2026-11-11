@@ -73,6 +73,15 @@ describe("live action cards", () => {
     expect(actionsFromFinding(f("booking_page", { profile_active: false }), "Boris Jabes")).toHaveLength(0);
   });
 
+  it("labels a booking page with no confirmed slots as unverified and caps it at 5%, like Step 5", () => {
+    const u = actionsFromFinding(f("booking_page", { profile_active: true, live: false, slots_confirmed: false }), "Boris Jabes")[0]!;
+    expect(u.title).toMatch(/\(unverified page\)$/);
+    expect(u.p).toBe(0.05);
+    const v = actionsFromFinding(f("booking_page", { live: true }), "Boris Jabes")[0]!;
+    expect(v.title).not.toMatch(/unverified/);
+    expect(v.p).toBe(0.4);
+  });
+
   it("fits an event to the deadline by its date, and leaves an undated event unconfirmed", () => {
     const got: LiveAction[] = [];
     const live = new LiveActions(() => "Boris Jabes", (a) => got.push(a), 1, "2026-11-12");
@@ -91,7 +100,7 @@ describe("live action cards", () => {
     const live = new LiveActions(() => "Boris Jabes", (a) => got.push(a), 0); // deadline today
     for (let i = 0; i < 4; i++) live.consider({ ...f("precedent", {}, `p${i}`), id: `f${i}`, source_url: `https://e.com/${i}` });
     live.consider({ ...f("inner_circle", { handle: "gdb", count: 3 }), id: "f9" });
-    expect(got.filter((a) => a.from_kind === "precedent")).toHaveLength(2);
+    expect(got.filter((a) => a.from_kind === "precedent")).toHaveLength(1); // same advice from 4 write-ups is one card
     expect(got.some((a) => a.contact === "@gdb")).toBe(true);
     expect(got.every((a) => a.in_total === false)).toBe(true); // 3-5 day routes, deadline today
   });
@@ -102,7 +111,7 @@ describe("live action cards", () => {
     const live = new LiveActions(() => "Boris Jabes", (a) => got.push(a));
     store.onSave((x) => live.consider(x));
     for (let i = 0; i < 5; i++) store.save({ step: "step1", tool: "x_profile", kind: "post", claim: `post ${i}`, source_url: `https://x.com/b/status/${i}`, confidence: "high" });
-    expect(got).toHaveLength(2); // posts capped at 2
+    expect(got).toHaveLength(1); // five posts give the same advice: one card
     store.save({ step: "step2", tool: "probe_booking_page", kind: "booking_page", claim: "cal", source_url: "https://cal.com/b", confidence: "high" });
     expect(got.at(-1)?.type).toBe("booking_page");
     expect(got.every((a) => a.provisional && /^live\d+$/.test(a.id))).toBe(true);
