@@ -129,8 +129,10 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
 
   // Needs your Luma events (or gives up on them when the sign-in check is skipped or over budget).
   let eventUrls: string[] = [...(input.eventUrls ?? [])];
-  // Your Luma events help, but never hold up the event check (and the events you passed in) for more than 30 s.
-  const mineOrLate = Promise.race([mineP, new Promise<undefined>((r) => setTimeout(() => r(undefined), 30_000).unref?.())]);
+  // Your Luma events help, but never hold up the event check (and the events you passed in) for more than 30 s,
+  // or a third of the time left, so a short run still checks the supplied events.
+  const lumaWaitMs = Math.max(0, Math.min(30_000, Math.floor(budget.remainingMs() / 3)));
+  const mineOrLate = Promise.race([mineP, new Promise<undefined>((r) => setTimeout(() => r(undefined), lumaWaitMs).unref?.())]);
   const eventsP = mineOrLate.then((mine) => {
     eventUrls = [...eventUrls, ...(mine?.events ?? []).map((e) => e.url)];
     return step("step2.find_events", `Finding events ${first} joins before ${input.deadline}`, (c) => find_events({ target, deadline: input.deadline, eventUrls }, c), summarizeFindEvents);
