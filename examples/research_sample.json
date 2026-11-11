@@ -1,0 +1,11 @@
+{
+  "goal": {"target_name": "Boris Jabes", "deadline": "today", "success": "15-min call", "budget_jpy": 30000},
+  "target_id": {"name": "Boris Jabes", "company": "Y Combinator", "role": "Visiting Partner", "company_domain": "ycombinator.com", "x_handle": "", "linkedin_url": "", "website": ""},
+  "findings": [
+    {"id": "f1", "step": 1, "dimension": "web", "claim": "Listed as a YC Visiting Partner", "quote": "", "source_url": "https://www.crunchbase.com/person/boris-jabes", "date": "", "confidence": 0.7},
+    {"id": "f2", "step": 1, "dimension": "web", "claim": "Co-founded Census; Fivetran announced its acquisition of Census in May 2025", "quote": "", "source_url": "https://www.techtarget.com/", "date": "2025-05", "confidence": 0.8},
+    {"id": "f3", "step": 1, "dimension": "event", "claim": "Speaker page at Coalesce (dbt Labs)", "quote": "", "source_url": "https://coalesce.getdbt.com/speakers/boris-jabes", "date": "", "confidence": 0.7},
+    {"id": "f4", "step": 2, "dimension": "event", "claim": "He is the first-prize office hours at the c0mpiled-18 YC Startup School Hackathon Taipei tonight", "quote": "", "source_url": "https://luma.com/compiled-poy7", "date": "2026-11-11", "confidence": 0.9}
+  ],
+  "summary": "Sample input built from the spec appendix (manual research pass). Replace with the real Steps 1-2 output."
+}
