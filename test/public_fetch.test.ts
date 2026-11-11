@@ -45,6 +45,11 @@ describe("pinnedFetch", () => {
     const { pinnedFetch } = await import("../src/core/public_fetch.js");
     await expect(pinnedFetch("http://localhost:9/")).rejects.toThrow(/not a public/);
   });
+  it("DNS rebinding: a host that passes the pre-check but resolves privately at connect time is refused", async () => {
+    const { pinnedFetch } = await import("../src/core/public_fetch.js");
+    const firstAnswerPublic = async () => ["8.8.8.8"]; // what the pre-check sees; the connect-time lookup then gets 127.0.0.1
+    await expect(fetchPublic("http://localhost:9/", {}, pinnedFetch, firstAnswerPublic)).rejects.toThrow(/not a public/);
+  });
   it("turns a status Response() refuses into a rejection", async () => {
     const { createServer } = await import("node:net");
     const { pinnedFetch } = await import("../src/core/public_fetch.js");
