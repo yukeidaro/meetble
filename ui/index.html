@@ -727,14 +727,17 @@ $('#goBtn').addEventListener('click', () => { document.body.className = 's-run';
 
 /* ---------- live mode: served by server.mjs, runs the real pipeline. Opened as a file (or ?demo=1) it plays the sample run. ---------- */
 let LIVE = false, es = null;
+// Served by server.mjs: same origin. Hosted (GitHub Pages): talk to the server on this computer, http://localhost:8787 (or ?api=...).
+const QS = new URLSearchParams(location.search);
+const API = QS.get('api') || (/github\.io$/.test(location.hostname) ? 'http://localhost:8787' : '');
 (async () => {
-  if(!location.protocol.startsWith('http') || new URLSearchParams(location.search).has('demo')) { $('#modeNote').textContent = 'Preview mode: sample data, nothing is sent.'; return; }
+  if(!location.protocol.startsWith('http') || QS.has('demo')) { $('#modeNote').textContent = 'Preview mode: sample data, nothing is sent.'; return; }
   try{
-    const h = await (await fetch('/api/health')).json(); LIVE = true; $('#modeTag').textContent = 'LIVE';
+    const h = await (await fetch(API + '/api/health')).json(); LIVE = true; $('#modeTag').textContent = 'LIVE';
     const miss = [!h.has_dist && 'dist/ (run npm run build)', !h.has_env && '.env', !h.has_profile && 'user_profile.json'].filter(Boolean);
     $('#modeNote').textContent = 'Live mode: runs the real research on this computer.' + (miss.length ? ' Missing: ' + miss.join(', ') : '');
     $('#dReuse').disabled = !h.has_research;
-  }catch{ $('#modeNote').textContent = 'Server not reachable: preview mode with sample data.'; }
+  }catch{ $('#modeNote').textContent = API ? 'Preview mode (sample data). For a live run, start node server.mjs on this computer and reload.' : 'Server not reachable: preview mode with sample data.'; }
 })();
 function onMeta(ev){
   if(ev.name){ $('#tName').textContent = ev.name; $('#avatar').textContent = ev.name.split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase(); }
@@ -748,9 +751,9 @@ async function runLive(){
   const body = { ask: $('#saidText').textContent, hint: $('#dHint').value.trim(), x_handle: $('#dX').value.trim(),
     event_urls: $('#dEvent').value.trim() ? [$('#dEvent').value.trim()] : [], reuse: $('#dReuse').checked };
   let id;
-  try{ id = (await (await fetch('/api/run', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)})).json()).id; }
+  try{ id = (await (await fetch(API + '/api/run', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)})).json()).id; }
   catch(e){ setState('Could not reach the local server', 'idle'); liveStop('Stopped'); return; }
-  es?.close(); es = new EventSource('/api/stream?id=' + id);
+  es?.close(); es = new EventSource(API + '/api/stream?id=' + id);
   es.onmessage = m => {
     if(my !== runId){ es.close(); return; }
     const ev = JSON.parse(m.data);
@@ -1137,7 +1140,7 @@ function buildActions(a1, a2, a3){
 
 /* ---------- restart ---------- */
 $('#resetBtn').addEventListener('click', () => {
-  runId++; es?.close(); if(LIVE) fetch('/api/stop', {method:'POST'}).catch(() => {}); $('#planSum').textContent = '';
+  runId++; es?.close(); if(LIVE) fetch(API + '/api/stop', {method:'POST'}).catch(() => {}); $('#planSum').textContent = '';
   log.length = 0; actions = []; filter = 'all'; openConfirm = null; cur = 0;
   Object.keys(status).forEach(k => delete status[k]); Object.keys(groups).forEach(k => delete groups[k]);
   counts.persona = counts.now = counts.prec = 0;
