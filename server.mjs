@@ -276,6 +276,7 @@ async function cloudSetup(j) {
     j.cleanup.push(chrome.close);
     env.MEETBLE_CDP_URL = chrome.url;
     env.MEETBLE_CDP_WAIT = "20"; // no Allow prompt on a server Chrome
+    env.MEETBLE_BROWSER_WORKER = "0"; // this run has its own Chrome: a shared per-server browser worker (PR #10) would drive the wrong one
     j.push({ type: "step", id: "cloudbrowser", group: G[0], label: "Browser research", status: "done", note: `server Chrome signed in to ${[...new Set(cookies.map((c) => c.domain.replace(/^\./, "")))].join(", ")}` });
   } catch (e) {
     env.MEETBLE_BROWSER = "0";
