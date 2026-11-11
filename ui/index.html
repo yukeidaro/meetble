@@ -407,6 +407,19 @@ body.s-run .aurora i{opacity:.4} body.s-run .aurora i:nth-child(n+2){opacity:.12
 .facts .fact:not(.kv) .src{padding-left:16px}
 .persona .nm{font-weight:400}
 .avatar{background:radial-gradient(circle at 30% 30%,var(--a2),var(--a1) 75%)}
+
+/* timeline for Right now / Precedents */
+.facts.tl{position:relative;padding-left:4px}
+.facts.tl::before{content:"";position:absolute;left:8px;top:18px;bottom:18px;width:1.5px;border-radius:1px;background:linear-gradient(var(--a1),color-mix(in srgb,var(--a2) 60%,transparent))}
+.facts.tl:has(.wait-txt)::before{display:none}
+.facts.tl .fact{border-top:0;padding:10px 0 10px 28px;position:relative}
+.facts.tl .fact .claim{padding-left:0}
+.facts.tl .fact .claim::before{display:none}
+.facts.tl .fact .src{padding-left:0}
+.facts.tl .fact::before{content:"";position:absolute;left:0;top:15px;width:11px;height:11px;border-radius:50%;background:var(--bg);border:2px solid var(--a1);box-sizing:border-box}
+.facts.tl .fact.soon::before{background:linear-gradient(135deg,var(--a1),var(--a2));border-color:transparent;box-shadow:0 0 0 4px color-mix(in srgb,var(--a1) 18%,transparent);animation:ping 1.8s infinite}
+.when{font-family:var(--fm);font-size:11px;font-weight:500;letter-spacing:.04em;color:var(--a1);text-transform:uppercase}
+.fact.soon .when{color:var(--a2)}
 </style>
 </head>
 <body>
@@ -489,8 +502,8 @@ body.s-run .aurora i{opacity:.4} body.s-run .aurora i:nth-child(n+2){opacity:.12
         <div class="persona"><div class="avatar">BJ</div><div><div class="nm">Boris Jabes</div><div class="rl" id="role">Identifying…</div></div></div>
         <div class="facts" id="f-persona"></div>
       </div>
-      <div class="box card"><h3>Right now <span id="cntNow"></span></h3><div class="facts" id="f-now"><div class="wait-txt">Waiting for research…</div></div></div>
-      <div class="box card"><h3>Precedents · how others reached him <span id="cntPrec"></span></h3><div class="facts" id="f-prec"><div class="wait-txt">Waiting for research…</div></div></div>
+      <div class="box card"><h3>Right now <span id="cntNow"></span></h3><div class="facts tl" id="f-now"><div class="wait-txt">Waiting for research…</div></div></div>
+      <div class="box card"><h3>Precedents · how others reached him <span id="cntPrec"></span></h3><div class="facts tl" id="f-prec"><div class="wait-txt">Waiting for research…</div></div></div>
     </div>
 
     <div class="pane" id="panePlan" hidden>
@@ -800,9 +813,10 @@ function onFinding(ev){
   $({persona:'#cntPersona', now:'#cntNow', prec:'#cntPrec'}[ev.section]).textContent = counts[ev.section];
   const host = ev.source_url ? ev.source_url.replace(/^https?:\/\/(www\.)?/,'').split('/')[0] : '';
   const d = document.createElement('div'); d.className = 'fact' + (ev.label ? ' kv' : '');
-  d.innerHTML = `${ev.label ? `<span class="k">${esc(ev.label)}</span>` : ''}<div class="v"><div class="claim">${esc(ev.claim.replace(/ \(sample\)$/, ''))}</div>${host ? `<a class="src" href="${esc(ev.source_url)}" target="_blank" rel="noopener">${esc(host)} ↗</a>` : `<span class="src">${esc(ev.via)}</span>`}</div>`;
+  d.innerHTML = `${ev.label ? `<span class="k">${esc(ev.label)}</span>` : ''}<div class="v">${ev.date ? `<span class="when">${esc(ev.date)}</span>` : ''}<div class="claim">${esc(ev.claim.replace(/ \(sample\)$/, ''))}</div>${host ? `<a class="src" href="${esc(ev.source_url)}" target="_blank" rel="noopener">${esc(host)} ↗</a>` : `<span class="src">${esc(ev.via)}</span>`}</div>`;
   const order = ['Role','Built','Talks about','Circle'], o = order.indexOf(ev.label); // tracks finish in any order
-  d.dataset.o = o < 0 ? 99 : o;
+  d.dataset.o = ev.ts ? -ev.ts : o < 0 ? 99 : o;
+  if(ev.ts >= 202611111800) d.classList.add('soon'); // shortcut: demo 'today' is fixed to Nov 11, 2026
   box.insertBefore(d, [...box.children].find(c => +c.dataset.o > +d.dataset.o) || null);
 }
 
@@ -1003,13 +1017,13 @@ async function run(){
     track('web', 'Searched the web', LAYERS('38 results','9 kept','6 pages'), [
       {section:'persona', label:'Role', claim:'Visiting Partner at Y Combinator', source_url:'https://www.crunchbase.com/'},
       {section:'persona', label:'Built', claim:'Co-founded Census, acquired by Fivetran (May 2025)', source_url:'https://www.techtarget.com/'},
-      {section:'now', claim:'Has a speaker page at Coalesce, the dbt Labs conference', source_url:'https://coalesce.getdbt.com/'},
+      {section:'now', date:'Oct 2025', ts:202510150000, claim:'Has a speaker page at Coalesce, the dbt Labs conference', source_url:'https://coalesce.getdbt.com/'},
     ], '6 pages read, 3 findings'),
     track('podcast', 'Searched podcasts and talks', LAYERS('12 episodes','4 transcripts','his words only'), [
       {section:'persona', label:'Talks about', claim:'Data activation and the modern data stack (sample)', source_url:'https://www.youtube.com/results?search_query=Boris+Jabes'},
     ], '4 episodes, quotes pending'),
     track('linkedin', 'Read LinkedIn', LAYERS('profile','posts, comments','mutuals'), [
-      {section:'prec', claim:'You share 2 connections; one used to work at Census (sample)', source_url:'https://www.linkedin.com/'},
+      {section:'prec', date:'Today', ts:202611110000, claim:'You share 2 connections; one used to work at Census (sample)', source_url:'https://www.linkedin.com/'},
     ], '2 mutual connections', 'LinkedIn'),
     track('x', 'Read X posts and replies', LAYERS('recent posts','replies only','top 5 accounts'), [
       {section:'persona', label:'Circle', claim:'Founders and data-tool builders (sample)', source_url:'https://x.com/'},
@@ -1025,8 +1039,8 @@ async function run(){
   emit({type:'step', id:'rp', group:G2, label:'Reading his latest posts', status:'running', via:'X'});
   browse('x.com', 'Reading his latest posts', 'x.com/…');
   await sleep(800); if(!alive()) return;
-  emit({type:'finding', section:'now', claim:'Latest X post is about data tooling for AI teams (sample)', source_url:'https://x.com/'});
-  emit({type:'finding', section:'now', claim:'Latest news coverage: the Fivetran–Census acquisition (May 2025); nothing newer', source_url:'https://www.techtarget.com/'});
+  emit({type:'finding', section:'now', date:'Nov 9', ts:202611090000, claim:'Posted on X about data tooling for AI teams (sample)', source_url:'https://x.com/'});
+  emit({type:'finding', section:'now', date:'May 2025', ts:202505010000, claim:'Latest news: Fivetran acquires Census. Nothing newer', source_url:'https://www.techtarget.com/'});
   emit({type:'step', id:'rp', group:G2, label:'Read his latest posts and news', status:'done', note:'1 recent post, no new coverage', via:'X'});
   emit({type:'step', id:'bk', group:G2, label:'Probing booking pages', status:'running'});
   browse('calendly.com', 'Trying calendly.com/boris-jabes', 'calendly.com/boris-jabes');
@@ -1035,7 +1049,7 @@ async function run(){
   emit({type:'step', id:'ev', group:G2, label:'Finding events before the deadline', status:'running'});
   browse('lu.ma', 'Searching events before the deadline', 'lu.ma/discover');
   await sleep(900); if(!alive()) return;
-  emit({type:'finding', section:'now', claim:'Tonight: first prize at this hackathon is office hours with him. Judging starts 22:45', source_url:'https://lu.ma/'});
+  emit({type:'finding', section:'now', date:'Tonight · 22:45', ts:202611112245, claim:'Judges this hackathon. First prize is office hours with him', source_url:'https://lu.ma/'});
   emit({type:'step', id:'ev', group:G2, label:'Found events', status:'done', note:'1 tonight: this hackathon'});
   if(isOn('luma')){
     emit({type:'step', id:'lu', group:G2, label:'Signing in to Luma to read the guest list', status:'running', via:'Luma'});
@@ -1045,8 +1059,8 @@ async function run(){
     await sleep(550); if(!alive()) return;
     emit({type:'step', id:'lu', group:G2, label:'Read the Luma guest list', status:'done', note:'you\'re registered; he\'s listed as a judge (sample)', via:'Luma'});
   } else emit({type:'step', id:'lu', group:G2, label:'Luma guest list', status:'locked', note:'Luma not linked'});
-  emit({type:'finding', section:'prec', claim:'Hackathon winners get office hours with the judging partner: a public route in', source_url:'https://lu.ma/'});
-  emit({type:'finding', section:'prec', claim:'Founders describe meeting him within a week through an intro from a portfolio founder (sample)', source_url:'https://www.ycombinator.com/blog'});
+  emit({type:'finding', section:'prec', date:'Tonight', ts:202611112200, claim:'Hackathon winners get office hours with the judging partner', source_url:'https://lu.ma/'});
+  emit({type:'finding', section:'prec', date:'2025', ts:202501010000, claim:'A founder met him within a week through an intro from a portfolio founder (sample)', source_url:'https://www.ycombinator.com/blog'});
 
   emit({type:'step', id:'nd', group:G3, label:'Guessing what he wants', status:'running'});
   browse('reasoning', 'Matching his needs to what you can offer', 'meetble://reasoning');

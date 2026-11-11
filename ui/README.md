@@ -12,7 +12,7 @@ The UI only draws these events. The sample run in `index.html` (`run()`) emits t
 | --- | --- | --- |
 | `track_started` / `track_done` | `track` | research track state |
 | `step` | `id`, `group`, `label`, `status` (`running`/`done`/`none`/`locked`), `note`, `layers`, `at`, `via` | a checklist line |
-| `finding` | `section` (`persona`/`now`/`prec`), `label`, `claim`, `source_url` | a row on the research board |
+| `finding` | `section` (`persona`/`now`/`prec`), `label`, `claim`, `source_url`, `date` (label, e.g. "Nov 9"), `ts` (sortable, YYYYMMDDHHMM) | a row on the research board; `now` and `prec` show as a timeline, newest first |
 | `browse` | `domain`, `action`, `url` | the live agent view (what the agent has open) |
 | `actions` | `actions[]` with `base`, `rel`, `time`, `warm`, `chan`, `title`, `cta`, `kind`, `out`, `whyDo` | the action card deck (% is computed in the UI) |
 | `action_status` | `id`, `s` (`running`/`done`/`waiting`), `t`, `note` | the status on a card |
