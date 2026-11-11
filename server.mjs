@@ -197,8 +197,11 @@ const jobs = new Map(); // owner ("local", or the Google account id in cloud mod
 
 function startJob(body, owner = "local", user = null) {
   const prev = jobs.get(owner);
+  // Check capacity before stopping anything: the person's own run doesn't count, since this request replaces it.
+  const busy = new Set([...[...jobs.values()].filter((x) => !x.done), ...launching]);
+  if (prev) busy.delete(prev);
+  if (busy.size >= MAX_RUNS) throw httpError(429, `The server is busy (${MAX_RUNS} runs going). Try again in a few minutes.`);
   if (prev && !prev.done) stopJob(owner);
-  if (new Set([...[...jobs.values()].filter((x) => !x.done), ...launching]).size >= MAX_RUNS) throw httpError(429, `The server is busy (${MAX_RUNS} runs going). Try again in a few minutes.`);
   const ask = parseAsk(body.ask);
   if (body.name) ask.name = String(body.name).trim();
   const j = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), events: [], clients: new Set(), done: false, child: null, ask, owner, user, paths: pathsFor(owner), cleanup: [] };
@@ -276,7 +279,7 @@ export function publicHttpUrl(u) {
 
 /** Cloud mode: the person's profile file, and a headless Chrome signed in with their saved sessions (if any). */
 async function cloudSetup(j) {
-  const u = j.user, env = {};
+  const u = j.user, env = { MEETBLE_PUBLIC_LINKS_ONLY: "1" }; // find_events checks every event-link hop resolves to a public address
   writeFileSync(j.paths.profile, JSON.stringify(accounts.profileJson(u), null, 2), "utf8");
   const cookies = accounts.browserCookies(u);
   if (!cookies.length || process.env.MEETBLE_BROWSER === "0") {
