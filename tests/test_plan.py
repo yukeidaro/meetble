@@ -227,7 +227,7 @@ class RobustnessTests(unittest.TestCase):
 class CopilotReviewTests(unittest.TestCase):
     """Cases from the GPT 6.1 review; each pins a root-cause fix."""
 
-    def test_timeout_retried_once_only(self):
+    def test_timeout_not_retried(self):  # a retry doubled the stall on Step 3 (live run)
         calls = []
         orig_open, orig_sleep = llm.urllib.request.urlopen, llm.time.sleep
         def slow(*a, **k):
@@ -240,12 +240,13 @@ class CopilotReviewTests(unittest.TestCase):
                 llm._post({})
         finally:
             llm.urllib.request.urlopen, llm.time.sleep = orig_open, orig_sleep
-        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(calls), 1)
 
     def test_settings_read_at_call_time(self):
-        os.environ["HF_EFFORT"] = "low"
+        self.assertEqual(llm._effort(), "low")  # default: fast enough that Step 3 doesn't stall
+        os.environ["HF_EFFORT"] = "high"
         try:
-            self.assertEqual(llm._effort(), "low")
+            self.assertEqual(llm._effort(), "high")
         finally:
             del os.environ["HF_EFFORT"]
 

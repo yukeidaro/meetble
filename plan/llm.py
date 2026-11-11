@@ -18,14 +18,16 @@ def _model():
 
 
 def _effort():
-    return os.environ.get("HF_EFFORT", "medium")  # low | medium | high
+    # low by default: with medium effort, a non-streamed Step 3 call thought for minutes and hit the read
+    # timeout, then retried, so a live run sat on Step 3 for 5+ minutes (2026-11-11).
+    return os.environ.get("HF_EFFORT", "low")  # low | medium | high
 
 
 def _timeout():
     try:
-        return max(30, int(os.environ.get("HF_TIMEOUT_S", "240")))
+        return max(30, int(os.environ.get("HF_TIMEOUT_S", "150")))
     except ValueError:
-        return 240
+        return 150
 
 
 def load_env(start_dir=None):
@@ -86,8 +88,8 @@ def _post(body):
             last = LLMError(f"network error: {e}")
             if isinstance(e, TimeoutError) or "timed out" in str(e):
                 timeouts += 1
-                if timeouts >= 2:  # a timed-out call may still be billed: at most one retry
-                    raise last from None
+                # No retry after a timeout: it was billed and would just stall the run for another full wait.
+                raise LLMError(f"the model took longer than {_timeout()} s (set HF_TIMEOUT_S to wait longer)") from None
             if attempt < 3:
                 time.sleep(2 ** (attempt + 1))
                 continue
