@@ -22,6 +22,22 @@ import os
 import sys
 
 from pydantic import BaseModel
+
+# Chrome's remote-debugging mode asks "Allow?" on every new connection, and the CDP client gives up on the
+# WebSocket handshake after ~15 s. Give the person 120 s to click Allow. Patched on the class itself, so it
+# applies however browser-use imported it.
+try:
+    import websockets.asyncio.client as _wsc
+    _orig_init = _wsc.connect.__init__
+
+    def _patient_init(self, *a, **kw):
+        kw["open_timeout"] = max(float(kw.get("open_timeout") or 0), float(os.environ.get("MEETBLE_CDP_WAIT", "120")))
+        return _orig_init(self, *a, **kw)
+
+    _wsc.connect.__init__ = _patient_init
+except Exception:
+    pass
+
 from browser_use import Agent, Browser, ChatAnthropic
 
 MODEL = os.environ.get("HF_BROWSER_MODEL", "claude-sonnet-5-5")
