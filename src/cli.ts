@@ -21,7 +21,7 @@ function arg(name: string): string | undefined {
 
 const name = process.argv.slice(2).find((a, i, all) => !a.startsWith("--") && !(all[i - 1] ?? "").startsWith("--"));
 if (!name) {
-  console.error('Usage: node dist/cli.js "<person name>" [--deadline YYYY-MM-DD] [--hint "..."] [--x-handle handle] [--profile user_profile.json] [--out out/research.json]');
+  console.error('Usage: node dist/cli.js "<person name>" [--deadline YYYY-MM-DD] [--hint "..."] [--x-handle handle] [--event-url URL ...] [--profile user_profile.json] [--out out/research.json]');
   process.exit(1);
 }
 const deadline = arg("deadline") ?? new Date(Date.now() + 7 * 864e5).toISOString().slice(0, 10);
@@ -33,10 +33,12 @@ if (!isYmd(deadline)) {
 const out = arg("out") ?? "out/research.json";
 const profilePath = arg("profile") ?? "user_profile.json";
 let offerInventory: unknown[] = [];
+let profileEvents: string[] = []; // user_profile.json my_events: [{url}] or [url]
 if (existsSync(profilePath)) {
   try {
     const p = JSON.parse(readFileSync(profilePath, "utf8").replace(/^\uFEFF/, "")); // strip BOM (Windows editors)
     offerInventory = Array.isArray(p.offer_inventory) ? p.offer_inventory : Array.isArray(p.offer_inventory_draft) ? p.offer_inventory_draft : [];
+    if (Array.isArray(p.my_events)) profileEvents = p.my_events.map((e: unknown) => (typeof e === "string" ? e : (e as { url?: unknown })?.url)).filter((u: unknown): u is string => typeof u === "string");
   } catch (e) {
     console.error(`Could not read ${profilePath}: ${(e as Error).message}`);
   }
@@ -68,7 +70,8 @@ const ctx: ToolContext = {
 
 const xHandle = arg("x-handle")?.replace(/^@/, "");
 console.log(`Meetble: researching ${name} (deadline ${deadline})\n`);
-const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle } }, ctx);
+const eventUrls: string[] = [...process.argv.flatMap((a, i) => { const v = process.argv[i + 1]; return a === "--event-url" && v ? [v] : []; }), ...profileEvents];
+const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls }, ctx);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify({ ...result, events_log: events }, null, 2), "utf8");
 console.log(`\n${result.findings.length} findings saved to ${out}`);

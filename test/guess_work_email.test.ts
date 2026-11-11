@@ -238,3 +238,16 @@ describe("guess_work_email: Hunter", () => {
     expect(calls.length).toBe(1);
   });
 });
+
+import { isSearchEngineUrl, summarizeGuessWorkEmail as sgwe } from "../src/tools/guess_work_email.js";
+describe("live-run regressions (email)", () => {
+  it("search-engine query URLs are not evidence", () => {
+    expect(isSearchEngineUrl("https://www.google.com/search?q=site:linkedin.com%20boris")).toBe(true);
+    expect(isSearchEngineUrl("https://www.google.com/about")).toBe(false);
+    expect(isSearchEngineUrl("https://ycombinator.com/people")).toBe(false);
+  });
+  it("summary names Hunter's own check instead of a contradictory 'unverified'", () => {
+    expect(sgwe({ email: "boris@ycombinator.com", confidence: "medium", method: "hunter", evidence_urls: [], hunter_score: 96, hunter_verification: "valid" }))
+      .toBe("boris@ycombinator.com (Hunter score 96, medium confidence, Hunter check: valid)");
+  });
+});
