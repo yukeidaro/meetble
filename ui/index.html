@@ -730,10 +730,12 @@ let LIVE = false, es = null;
 // Served by server.mjs: same origin. Hosted (GitHub Pages): talk to the server on this computer, http://localhost:8787 (or ?api=...).
 const QS = new URLSearchParams(location.search);
 const API = QS.get('api') || (/github\.io$/.test(location.hostname) ? 'http://localhost:8787' : '');
+const TOK = QS.get('token') ? 'token=' + encodeURIComponent(QS.get('token')) : '';
+const q = path => API + path + (TOK ? (path.includes('?') ? '&' : '?') + TOK : '');
 (async () => {
   if(!location.protocol.startsWith('http') || QS.has('demo')) { $('#modeNote').textContent = 'Preview mode: sample data, nothing is sent.'; return; }
   try{
-    const h = await (await fetch(API + '/api/health')).json(); LIVE = true; $('#modeTag').textContent = 'LIVE';
+    const h = await (await fetch(q('/api/health'))).json(); LIVE = true; $('#modeTag').textContent = 'LIVE';
     const miss = [!h.has_dist && 'dist/ (run npm run build)', !h.has_env && '.env', !h.has_profile && 'user_profile.json'].filter(Boolean);
     $('#modeNote').textContent = 'Live mode: runs the real research on this computer.' + (miss.length ? ' Missing: ' + miss.join(', ') : '');
     $('#dReuse').disabled = !h.has_research;
@@ -751,9 +753,9 @@ async function runLive(){
   const body = { ask: $('#saidText').textContent, hint: $('#dHint').value.trim(), x_handle: $('#dX').value.trim(),
     event_urls: $('#dEvent').value.trim() ? [$('#dEvent').value.trim()] : [], reuse: $('#dReuse').checked };
   let id;
-  try{ id = (await (await fetch(API + '/api/run', {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)})).json()).id; }
+  try{ id = (await (await fetch(q('/api/run'), {method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify(body)})).json()).id; }
   catch(e){ setState('Could not reach the local server', 'idle'); liveStop('Stopped'); return; }
-  es?.close(); es = new EventSource(API + '/api/stream?id=' + id);
+  es?.close(); es = new EventSource(q('/api/stream?id=' + id));
   es.onmessage = m => {
     if(my !== runId){ es.close(); return; }
     const ev = JSON.parse(m.data);
@@ -1140,7 +1142,7 @@ function buildActions(a1, a2, a3){
 
 /* ---------- restart ---------- */
 $('#resetBtn').addEventListener('click', () => {
-  runId++; es?.close(); if(LIVE) fetch(API + '/api/stop', {method:'POST'}).catch(() => {}); $('#planSum').textContent = '';
+  runId++; es?.close(); if(LIVE) fetch(q('/api/stop'), {method:'POST'}).catch(() => {}); $('#planSum').textContent = '';
   log.length = 0; actions = []; filter = 'all'; openConfirm = null; cur = 0;
   Object.keys(status).forEach(k => delete status[k]); Object.keys(groups).forEach(k => delete groups[k]);
   counts.persona = counts.now = counts.prec = 0;
