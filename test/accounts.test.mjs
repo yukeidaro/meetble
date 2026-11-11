@@ -47,6 +47,26 @@ describe("accounts", () => {
     await expect(setup(good).verifyGoogle("not.a.jwt")).rejects.toThrow(/didn't accept/);
     await expect(setup({ ...good, exp: String(Math.floor(Date.now() / 1000) - 10) }).verifyGoogle("t")).rejects.toThrow(/expired/);
   });
+  it("rejects a missing, non-numeric, or exactly-now expiry", async () => {
+    const { exp, ...noExp } = good;
+    await expect(setup(noExp).verifyGoogle("t")).rejects.toThrow(/expired/);
+    await expect(setup({ ...good, exp: "soon" }).verifyGoogle("t")).rejects.toThrow(/expired/);
+    const t0 = 1_800_000_000_000;
+    await expect(setup({ ...good, exp: String(t0 / 1000) }, { now: () => t0 }).verifyGoogle("t")).rejects.toThrow(/expired/);
+  });
+  it("refreshes Google's keys for an unknown kid at most once a minute", async () => {
+    let calls = 0, t = 1_800_000_000_000;
+    const fetchImpl = async () => { calls++; return { ok: true, headers: new Map([["cache-control", "max-age=3600"]]), json: async () => ({ keys: [JWK] }) }; };
+    const a = setup(good, { fetchImpl, now: () => t });
+    const bad = () => a.verifyGoogle(jwt({ ...good, exp: String(t / 1000 + 600) }, privateKey, "nope"));
+    await expect(bad()).rejects.toThrow(/didn't accept/); // initial fetch + one forced refresh
+    expect(calls).toBe(2);
+    for (let i = 0; i < 5; i++) await expect(bad()).rejects.toThrow(/didn't accept/);
+    expect(calls).toBe(2); // cache still fresh, refresh throttled
+    t += 61_000;
+    await expect(bad()).rejects.toThrow(/didn't accept/);
+    expect(calls).toBe(3); // rotation is still picked up after a minute
+  });
   it("drops a session once its email leaves the allow list", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "mb-"));
     const open = setup(good, { dataDir });
