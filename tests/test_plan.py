@@ -13,6 +13,7 @@ from plan import __main__ as cli, common, llm, scoring, step3_needs, step4_inter
 
 HERE = os.path.dirname(__file__)
 SAMPLE = os.path.join(HERE, "..", "examples", "research_sample.json")
+STEPS12_EMPTY = json.loads('{"goal": {"target_name": "Boris Jabes", "deadline": "2026-11-20", "meet": "reply, call or in-person meeting"}, "target_id": {"name": "Boris Jabes"}, "ambiguous_target": false, "candidates": [], "offer_inventory": [{"offer": "Japan market access", "useful_to": "US founders"}, {"offer": "GTM at Microsoft Japan", "useful_to": "Founders selling into large companies"}], "findings": [], "booking_pages": [], "events": [], "email_guess": {"skipped": true, "reason": "no HUNTER_API_KEY and no company domain", "confidence": "low", "method": "none", "evidence_urls": []}, "summary": {"counts_by_dimension": {}, "x_profile": {"skipped": true, "reason": "no X handle for target"}, "instagram": null, "web": null, "podcasts": null, "precedents": null, "mentions": {"web": null, "x": null}}, "events_log": []}')
 PROFILE = {"name": "Yu", "background": ["4 years at Microsoft Japan"], "offer_inventory_draft": [{"offer": "Japan market access", "useful_to": "US founders"}]}
 
 SEEN_PROMPTS = []
@@ -199,8 +200,11 @@ class RobustnessTests(unittest.TestCase):
         self.assertFalse(a["fits_deadline"])
 
     def test_real_steps12_output_runs(self):
-        p = os.path.join(HERE, "..", "examples", "research_from_steps12_empty.json")
+        # Inline copy of an empty Steps 0-2 run (findings: []), with an employer-naming offer the output must scrub.
         with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "research.json")
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(STEPS12_EMPTY, f)
             out = os.path.join(d, "plan.json")
             with redirect_stdout(io.StringIO()):
                 rc = cli.main([p, "--out", out, "--no-interview", "--consent", "no"])
