@@ -9,6 +9,11 @@ import { fakeFetch, makeCtx } from "./helpers.js";
 beforeEach(() => resetExaMcpSession());
 
 describe("time budget", () => {
+  it("aborts the step's signal when its budget runs out", async () => {
+    let sig: AbortSignal | undefined;
+    await expect(withTimeout((s) => { sig = s; return new Promise(() => {}); }, 20)).rejects.toBeInstanceOf(OverBudget);
+    expect(sig?.aborted).toBe(true);
+  });
   it("withTimeout gives up on a stalled call and reports it as skipped", async () => {
     await expect(withTimeout(() => new Promise(() => {}), 20)).rejects.toBeInstanceOf(OverBudget);
     await expect(withTimeout(async () => 7, 1000)).resolves.toBe(7);
@@ -47,9 +52,29 @@ describe("live action cards", () => {
     expect(actionsFromFinding(f("bio"), "Boris Jabes")).toHaveLength(0);
     const m = actionsFromFinding(f("mutuals", { mutual_connections: ["Ann Lee", "Bo Chen", "Cy Wu", "Di Ng"] }), "Boris Jabes");
     expect(m.map((a) => a.title)).toEqual(["Ask Ann Lee for an intro to Boris", "Ask Bo Chen for an intro to Boris", "Ask Cy Wu for an intro to Boris"]);
-    expect(m[0].type).toBe("referral");
-    expect(actionsFromFinding(f("inner_circle", { handle: "gdb", count: 4 }), "Boris Jabes")[0].channel_url).toBe("https://x.com/gdb");
-    expect(actionsFromFinding(f("booking_page"), "Boris Jabes")[0].type).toBe("booking_page");
+    expect(m[0]!.type).toBe("referral");
+    expect(actionsFromFinding(f("inner_circle", { handle: "gdb", count: 4 }), "Boris Jabes")[0]!.channel_url).toBe("https://x.com/gdb");
+    expect(actionsFromFinding(f("booking_page"), "Boris Jabes")[0]!.type).toBe("booking_page");
+    expect(m[1]!.contact).toBe("Bo Chen");
+  });
+
+  it("only suggests an event when the person hosts, speaks or attends", () => {
+    expect(actionsFromFinding(f("event", { role: "unknown" }), "Boris Jabes")).toHaveLength(0);
+    expect(actionsFromFinding(f("event", { role: "speaker" }), "Boris Jabes")).toHaveLength(1);
+  });
+
+  it("leaves an unchecked paid-call price unknown instead of ¥0", () => {
+    expect(actionsFromFinding(f("paid_consult_page"), "Boris Jabes")[0]!.cost_jpy).toBeNull();
+  });
+
+  it("marks cards that can't land before the deadline, and caps precedents apart from inner-circle contacts", () => {
+    const got: LiveAction[] = [];
+    const live = new LiveActions(() => "Boris Jabes", (a) => got.push(a), 0); // deadline today
+    for (let i = 0; i < 4; i++) live.consider({ ...f("precedent", {}, `p${i}`), id: `f${i}`, source_url: `https://e.com/${i}` });
+    live.consider({ ...f("inner_circle", { handle: "gdb", count: 3 }), id: "f9" });
+    expect(got.filter((a) => a.from_kind === "precedent")).toHaveLength(2);
+    expect(got.some((a) => a.contact === "@gdb")).toBe(true);
+    expect(got.every((a) => a.in_total === false)).toBe(true); // 3-5 day routes, deadline today
   });
 
   it("emits each card the moment its finding is saved, deduped and capped", () => {
@@ -72,6 +97,8 @@ describe("live action cards", () => {
     const { ctx } = makeCtx(fetch);
     const seen: LiveAction[] = [];
     const r = await runResearch({ name: "Boris Jabes", deadline: "2026-11-20", onAction: (a) => seen.push(a) }, ctx);
+    expect(seen.length).toBeGreaterThan(0);
     expect(seen.length).toBe(r.live_actions.length);
+    expect(seen.some((a) => a.type === "booking_page" && /calendly\.com/.test(a.channel_url))).toBe(true);
   }, 20_000);
 });

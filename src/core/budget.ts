@@ -25,11 +25,18 @@ export class OverBudget extends Error {
   }
 }
 
-/** Resolves with fn()'s value, or rejects with OverBudget after ms. fn keeps running in the background. */
-export function withTimeout<T>(fn: () => Promise<T>, ms: number): Promise<T> {
-  if (ms <= 0) return Promise.reject(new OverBudget(0));
+/**
+ * Resolves with fn()'s value, or rejects with OverBudget after ms. On expiry the signal handed to fn is aborted,
+ * so HTTP calls that take it (core/http.ts requestJson) stop instead of running on in the background.
+ */
+export function withTimeout<T>(fn: (signal: AbortSignal) => Promise<T>, ms: number, parent?: AbortSignal): Promise<T> {
+  const ac = new AbortController();
+  const onParent = () => ac.abort(parent?.reason);
+  parent?.addEventListener("abort", onParent, { once: true });
+  if (ms <= 0) { ac.abort(new OverBudget(0)); return Promise.reject(new OverBudget(0)); }
   return new Promise<T>((resolve, reject) => {
-    const t = setTimeout(() => reject(new OverBudget(ms)), ms);
-    fn().then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+    const t = setTimeout(() => { const e = new OverBudget(ms); ac.abort(e); reject(e); }, ms);
+    const done = () => { clearTimeout(t); parent?.removeEventListener("abort", onParent); };
+    fn(ac.signal).then((v) => { done(); resolve(v); }, (e) => { done(); reject(e); });
   });
 }

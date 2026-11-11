@@ -20,40 +20,50 @@ export interface LiveAction {
   how: string[];
   channel_url: string;
   p: number;
-  cost_jpy: number;
+  /** null = not known yet (e.g. a paid call whose price hasn't been checked). */
+  cost_jpy: number | null;
   hours: number;
   days_to_outcome: number;
   reasons: Record<string, string>;
   evidence: string[];
+  /** The finding kind this came from (caps are per kind, so precedents can't crowd out warm contacts). */
+  from_kind: string;
+  /** The person this route goes through, for referrals and inner-circle cards. */
+  contact?: string;
   provisional: true;
-  in_total: true;
+  /** Fits the deadline by its own days_to_outcome; Step 5 re-checks budget and ranking. */
+  in_total: boolean;
+  fits_deadline: boolean;
 }
 
 const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1).trimEnd() + "…" : s);
 
 /** Returns the actions one finding opens up (often none). Pure: the caller dedupes and emits. */
-export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAction, "id" | "provisional" | "in_total">[] {
+export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAction, "id" | "provisional" | "in_total" | "fits_deadline">[] {
   const first = targetName.split(/\s+/)[0] || targetName;
   const d = (f.data ?? {}) as Record<string, unknown>;
-  const mk = (type: LeadType, title: string, how: string[], url: string, cost: number, hours: number, days: number, why: string) => ({
+  const mk = (type: LeadType, title: string, how: string[], url: string, cost: number | null, hours: number, days: number, why: string, contact?: string) => ({
     type, title, how, channel_url: url, p: BASE_LOW[type], cost_jpy: cost, hours, days_to_outcome: days,
     reasons: { base_rate: `${why} (provisional: lowest typical rate for this route, not yet weighed)` }, evidence: [f.id],
+    from_kind: f.kind, ...(contact ? { contact } : {}),
   });
   switch (f.kind) {
     case "mutuals": {
       const names = (Array.isArray(d.mutual_connections) ? d.mutual_connections : []).filter((x): x is string => typeof x === "string" && !!x.trim());
       return names.slice(0, 3).map((m) => mk("referral", `Ask ${m} for an intro to ${first}`,
         [`Check how well ${m} knows ${first} (shared company, investments, replies)`, `Send ${m} a short note asking for a two-line intro`],
-        f.source_url, 0, 0.3, 3, `${m} is a mutual LinkedIn connection`));
+        f.source_url, 0, 0.3, 3, `${m} is a mutual LinkedIn connection`, m));
     }
     case "inner_circle": {
       const h = typeof d.handle === "string" ? d.handle : "";
       if (!h) return [];
       return [mk("network_first", `Get to know @${h} first: ${first} talks with them often`,
         [`Read @${h}'s recent posts`, `Reply with something useful, then ask for an intro once there is a thread`],
-        `https://x.com/${h}`, 0, 1, 5, `${first} replied to @${h} ${d.count ?? "several"} times recently`)];
+        `https://x.com/${h}`, 0, 1, 5, `${first} replied to @${h} ${d.count ?? "several"} times recently`, `@${h}`)];
     }
     case "event":
+      // Only when the page shows them hosting, speaking or attending; a bare mention is not a way to meet them.
+      if (!["host", "speaker", "attendee"].includes(String(d.role))) return [];
       return [mk("event", `Meet ${first} at ${clip(f.claim.replace(/^.*?"(.*)".*$/, "$1"), 70)}`,
         ["Register (or confirm you're registered)", `Prepare a one-line opener tied to what ${first} is speaking about`, "Find them right after their session"],
         f.source_url, 0, 2, 1, f.claim)];
@@ -64,7 +74,7 @@ export function actionsFromFinding(f: Finding, targetName: string): Omit<LiveAct
     case "paid_consult_page":
       return [mk("paid_consult", `Book a paid call with ${first}`,
         ["Open the page and check the price and next slot", "Book with a specific question"],
-        f.source_url, 0, 0.3, 3, f.claim)];
+        f.source_url, null, 0.3, 3, f.claim)];
     case "email":
       return [mk("cold_email", `Email ${first} a short, value-first note`,
         [`Send to ${typeof d.email === "string" ? d.email : "the work address"}`, "Three sentences: who you are, the one thing you offer, one ask"],
@@ -88,19 +98,21 @@ export class LiveActions {
   private perType = new Map<string, number>();
   private seq = 0;
   readonly list: LiveAction[] = [];
-  private static CAP: Partial<Record<LeadType, number>> = { post_and_mention: 2, network_first: 4, referral: 5, event: 4 };
+  /** Caps per finding kind (not per action type): precedents and inner-circle contacts both make network_first cards. */
+  private static CAP: Record<string, number> = { post: 2, inner_circle: 4, precedent: 2, mutuals: 5, event: 4 };
 
-  constructor(private readonly targetName: () => string, private readonly onAction: (a: LiveAction) => void) {}
+  constructor(private readonly targetName: () => string, private readonly onAction: (a: LiveAction) => void, private readonly daysLeft?: number) {}
 
   consider(f: Finding): void {
     for (const a of actionsFromFinding(f, this.targetName())) {
       const key = `${a.type}|${a.channel_url}|${a.title}`.toLowerCase();
       if (this.seen.has(key)) continue;
-      const n = this.perType.get(a.type) ?? 0;
-      if (n >= (LiveActions.CAP[a.type] ?? 3)) continue;
+      const n = this.perType.get(a.from_kind) ?? 0;
+      if (n >= (LiveActions.CAP[a.from_kind] ?? 3)) continue;
       this.seen.add(key);
-      this.perType.set(a.type, n + 1);
-      const full: LiveAction = { ...a, id: `live${++this.seq}`, provisional: true, in_total: true };
+      this.perType.set(a.from_kind, n + 1);
+      const fits = this.daysLeft === undefined || a.days_to_outcome <= Math.max(this.daysLeft, 0.5);
+      const full: LiveAction = { ...a, id: `live${++this.seq}`, provisional: true, fits_deadline: fits, in_total: fits };
       this.list.push(full);
       this.onAction(full);
     }

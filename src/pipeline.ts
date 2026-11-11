@@ -81,63 +81,64 @@ export function runBudgetMs(env: NodeJS.ProcessEnv = process.env): number {
 export async function runResearch(input: ResearchInput, ctx: ToolContext) {
   const first = input.name.split(/\s+/)[0] ?? input.name;
   const budget = input.budget ?? new RunBudget(runBudgetMs());
-  const step = <T>(id: string, label: string, fn: () => Promise<T>, summarize: (r: T) => string) => {
+  // Each step gets its own context whose signal aborts when the step's budget runs out (HTTP tools stop too).
+  const step = <T>(id: string, label: string, fn: (c: ToolContext) => Promise<T>, summarize: (r: T) => string) => {
     const tool = id.replace(/^step\d\./, "").replace(/_recheck$/, "");
-    return runStep(ctx, id, label, () => withTimeout(fn, budget.capFor(STEP_CAP_MS[tool] ?? 90_000)), summarize);
+    return runStep(ctx, id, label, () => withTimeout((signal) => fn({ ...ctx, signal }), budget.capFor(STEP_CAP_MS[tool] ?? 90_000), ctx.signal), summarize);
   };
 
   let targetName = input.name;
-  const live = new LiveActions(() => targetName, (a) => input.onAction?.(a));
+  const live = new LiveActions(() => targetName, (a) => input.onAction?.(a), daysUntil(input.deadline, ctx.now()));
   ctx.findings.onSave((f) => live.consider(f));
 
   // STEP 0, in the background: sign-in check, then your Luma events.
   const loginP = (async () => {
-    let login = await step("step0.login_check", "Checking you're signed in to Luma, LinkedIn, X and Instagram", () => loginCheck({}, ctx), summarizeLoginCheck);
-    if (login && !login.skipped && (login.signed_out?.length || login.account_mismatch) && input.waitForLogin && (await input.waitForLogin(login))) {
-      login = await step("step0.login_recheck", "Re-checking sign-ins", () => loginCheck({}, ctx), summarizeLoginCheck);
+    let login = await step("step0.login_check", "Checking you're signed in to Luma, LinkedIn, X and Instagram", (c) => loginCheck({}, c), summarizeLoginCheck);
+    if (login && !login.skipped && (login.signed_out?.length || login.account_mismatch) && input.waitForLogin && (await withTimeout(() => input.waitForLogin!(login!), budget.remainingMs()).catch(() => false))) {
+      login = await step("step0.login_recheck", "Re-checking sign-ins", (c) => loginCheck({}, c), summarizeLoginCheck);
     }
     return login;
   })();
   const mineP = loginP.then((login) => login?.sites?.luma?.logged_in === true
-    ? step("step0.luma_my_events", "Reading your upcoming Luma events", () => lumaMyEvents({}, ctx), summarizeLumaMyEvents)
+    ? step("step0.luma_my_events", "Reading your upcoming Luma events", (c) => lumaMyEvents({}, c), summarizeLumaMyEvents)
     : undefined);
 
   const resolved = await step("step0.resolve_target", `Identifying ${input.name}`,
-    () => resolve_target({ name: input.name, hint: input.hint }, ctx), summarizeResolveTarget);
+    (c) => resolve_target({ name: input.name, hint: input.hint }, c), summarizeResolveTarget);
   const target: Target = { ...(resolved?.target ?? { name: input.name }), ...stripUndefined(input.targetOverrides ?? {}) };
   targetName = target.name || input.name;
 
   const xHandleP = target.x_handle
     ? Promise.resolve()
-    : step("step0.find_x_handle", `Finding ${input.name}'s X account`, () => findXHandle({ target }, ctx), summarizeFindXHandle)
+    : step("step0.find_x_handle", `Finding ${input.name}'s X account`, (c) => findXHandle({ target }, c), summarizeFindXHandle)
         .then((xh) => { if (xh?.handle) target.x_handle = xh.handle; });
 
   // STEP 1 + 2: start everything that only needs the identified person.
-  const liP = step("step1.linkedin_profile", `Opening ${first}'s LinkedIn in your Chrome`, () => linkedinProfile({ target }, ctx), summarizeLinkedInProfile);
-  const webP = step("step1.search_web", `Reading ${first}'s bio, interviews and essays`, () => search_web({ target }, ctx), summarizeSearchWeb);
-  const podsP = step("step1.podcast_quotes", `Finding ${first}'s podcasts and talks`, () => podcast_quotes({ target }, ctx), summarizePodcastQuotes);
-  const precP = step("step1.find_precedents", `Finding people who already reached ${first}`, () => find_precedents({ target }, ctx), summarizeFindPrecedents);
-  const igP = step("step1.instagram_public", `Checking ${first}'s public Instagram`, () => instagramPublic({ target }, ctx), summarizeInstagramPublic);
-  const webMentionsP = step("step2.recent_web_mentions", `Checking news about ${first} this week`, () => recent_web_mentions({ target }, ctx), summarizeRecentWebMentions);
+  const liP = step("step1.linkedin_profile", `Opening ${first}'s LinkedIn in your Chrome`, (c) => linkedinProfile({ target }, c), summarizeLinkedInProfile);
+  const webP = step("step1.search_web", `Reading ${first}'s bio, interviews and essays`, (c) => search_web({ target }, c), summarizeSearchWeb);
+  const podsP = step("step1.podcast_quotes", `Finding ${first}'s podcasts and talks`, (c) => podcast_quotes({ target }, c), summarizePodcastQuotes);
+  const precP = step("step1.find_precedents", `Finding people who already reached ${first}`, (c) => find_precedents({ target }, c), summarizeFindPrecedents);
+  const igP = step("step1.instagram_public", `Checking ${first}'s public Instagram`, (c) => instagramPublic({ target }, c), summarizeInstagramPublic);
+  const webMentionsP = step("step2.recent_web_mentions", `Checking news about ${first} this week`, (c) => recent_web_mentions({ target }, c), summarizeRecentWebMentions);
   const bioLinks = [target.website, target.linkedin_url].filter((u): u is string => typeof u === "string");
-  const bookingP = step("step2.probe_booking_page", `Looking for ${first}'s booking page`, () => probe_booking_page({ target, bioLinks }, ctx), summarizeProbeBookingPage);
+  const bookingP = step("step2.probe_booking_page", `Looking for ${first}'s booking page`, (c) => probe_booking_page({ target, bioLinks }, c), summarizeProbeBookingPage);
 
   // Needs the X handle.
-  const xpP = xHandleP.then(() => step("step1.x_profile", `Reading ${first}'s recent X posts`, () => xProfile({ target }, ctx), summarizeXProfile));
-  const xMentionsP = xHandleP.then(() => step("step2.recent_x_mentions", `Checking X posts by and about ${first} this week`, () => recentXMentions({ target }, ctx), summarizeRecentXMentions));
+  const xpP = xHandleP.then(() => step("step1.x_profile", `Reading ${first}'s recent X posts`, (c) => xProfile({ target }, c), summarizeXProfile));
+  const xMentionsP = xHandleP.then(() => step("step2.recent_x_mentions", `Checking X posts by and about ${first} this week`, (c) => recentXMentions({ target }, c), summarizeRecentXMentions));
 
   // Needs your Luma events (or gives up on them when the sign-in check is skipped or over budget).
   let eventUrls: string[] = [...(input.eventUrls ?? [])];
   const eventsP = mineP.then((mine) => {
     eventUrls = [...eventUrls, ...(mine?.events ?? []).map((e) => e.url)];
-    return step("step2.find_events", `Finding events ${first} joins before ${input.deadline}`, () => find_events({ target, deadline: input.deadline, eventUrls }, ctx), summarizeFindEvents);
+    return step("step2.find_events", `Finding events ${first} joins before ${input.deadline}`, (c) => find_events({ target, deadline: input.deadline, eventUrls }, c), summarizeFindEvents);
   });
 
   // Needs the company: known now, or read from LinkedIn (this used to race; now it's a dependency).
   const emailP = (target.company ? Promise.resolve() : liP.then((li) => {
     const c = companyFromRole(li?.data?.current_role) ?? companyFromRole(li?.data?.headline);
     if (!target.company && c) target.company = c;
-  })).then(() => step("step1.guess_work_email", `Estimating ${first}'s work email${target.company ? ` (${target.company})` : ""}`, () => guess_work_email({ target }, ctx), summarizeGuessWorkEmail));
+  })).then(() => step("step1.guess_work_email", `Estimating ${first}'s work email${target.company ? ` (${target.company})` : ""}`, (c) => guess_work_email({ target }, c), summarizeGuessWorkEmail));
 
   const [login, mine, web, pods, prec, xp, ig, email, li, webMentions, xMentions, events, booking] = await Promise.all([
     loginP, mineP, webP, podsP, precP, xpP, igP, emailP, liP, webMentionsP, xMentionsP, eventsP, bookingP,
@@ -174,6 +175,12 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
       mentions: { web: webMentions ?? null, x: xMentions ?? null },
     },
   };
+}
+
+/** Whole days from now until the end of the deadline day (0 = today). */
+export function daysUntil(ymd: string, now: Date): number | undefined {
+  const t = Date.parse(`${ymd}T23:59:59`);
+  return Number.isFinite(t) ? Math.max(0, Math.floor((t - now.getTime()) / 864e5)) : undefined;
 }
 
 function countBy(xs: string[]): Record<string, number> {

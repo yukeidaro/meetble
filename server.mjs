@@ -165,7 +165,7 @@ function toUiAction(a) {
   const r = a.reasons || {};
   const whyDo = [r.m_relevance, r.m_warmth, r.m_timing, r.m_channel, r.base_rate].filter(Boolean).slice(0, 4);
   if (a.provisional) whyDo.unshift("Found live during research; re-ranked when research ends");
-  whyDo.push(`¥${Number(a.cost_jpy || 0).toLocaleString()} · ${a.hours}h of your time · ${a.days_to_outcome} day(s) to a result`);
+  whyDo.push(`${a.cost_jpy == null ? "price not checked yet" : `¥${Number(a.cost_jpy).toLocaleString()}`} · ${a.hours}h of your time · ${a.days_to_outcome} day(s) to a result`);
   const inTotal = a.in_total ?? (a.fits_deadline !== false && a.fits_budget !== false);
   return {
     id: a.id, type: a.type, kind: draft || url ? "agent" : "you", out: OUT_OF[a.type] || "reply",
@@ -278,17 +278,26 @@ async function run(j, body) {
   const pargs = ["-m", "plan", RESEARCH, "--out", PLAN, "--no-interview"];
   if (existsSync(join(ROOT, "user_profile.json"))) pargs.push("--profile", join(ROOT, "user_profile.json"));
   const mtime = () => (existsSync(PLAN) ? statSync(PLAN).mtimeMs : 0), before = mtime();
+  // Steps 3-5 get a hard limit (MEETBLE_PLAN_TIMEOUT_S, default 240 s); past it, the live cards stand in.
+  const planMs = (Number(process.env.MEETBLE_PLAN_TIMEOUT_S) || 240) * 1000;
+  let planTimedOut = false;
+  const planTimer = setTimeout(() => { planTimedOut = true; try { j.child?.kill(); } catch {} }, planMs);
   const r = await runProc(j, PY, pargs, { PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }, stepHandler(j, () => G[5]));
+  clearTimeout(planTimer);
+  if (planTimedOut && !j.done) return fallback(`Steps 3-5 took longer than ${planMs / 1000} s and were stopped`);
   if (j.done) return;
   const planText = mtime() > before ? readFileSync(PLAN, "utf8") : null;
   if (!planText) return fallback(`Planning failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no plan written"}`);
-  const plan = JSON.parse(planText.replace(/^﻿/, ""));
+  let plan;
+  try { plan = JSON.parse(planText.replace(/^\uFEFF/, "")); } catch (e) { return fallback(`Plan file was not valid JSON: ${String(e?.message || e).slice(0, 120)}`); }
   if (plan.persona) push({ type: "finding", section: "persona", label: "Summary", claim: plan.persona, via: "Meetble" });
   const ranked = plan.actions || [];
   if (!ranked.length) return fallback("No actions came back from Step 5");
-  // Keep live cards Step 5 didn't cover (same type and link), so a path found during research never disappears.
-  const covered = new Set(ranked.map((a) => `${a.type}|${a.channel_url || ""}`));
-  const extra = j.live.filter((a) => !covered.has(`${a.type}|${a.channel_url || ""}`));
+  // Keep live cards Step 5 didn't cover, so a path found during research never disappears. A card is covered when
+  // Step 5 ranked the same route (type + link) and, for routes through a person, names that same person.
+  const coveredBy = (l) => ranked.some((a) => a.type === l.type && (a.channel_url || "") === (l.channel_url || "")
+    && (!l.contact || `${a.title} ${(a.how || []).join(" ")}`.toLowerCase().includes(l.contact.replace(/^@/, "").toLowerCase())));
+  const extra = j.live.filter((l) => !coveredBy(l));
   push({ type: "actions", actions: [...ranked, ...extra].map(toUiAction), p_total: plan.p_total, summary: plan.plan_summary || "" });
 }
 
