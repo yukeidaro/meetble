@@ -6,6 +6,7 @@
 // Each stdout checklist line ("ICON label (note)") becomes a UI event, streamed to the browser over SSE.
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -164,10 +165,11 @@ function toUiAction(a) {
   const acct = /linkedin\.com/i.test(url) ? "linkedin" : /(^|\/\/|\.)x\.com|twitter\.com/i.test(url) ? "x" : /lu\.ma|luma\.com/i.test(url) ? "luma" : null;
   const r = a.reasons || {};
   const whyDo = [r.m_relevance, r.m_warmth, r.m_timing, r.m_channel, r.base_rate].filter(Boolean).slice(0, 4);
-  whyDo.push(`¥${Number(a.cost_jpy || 0).toLocaleString()} · ${a.hours}h of your time · ${a.days_to_outcome} day(s) to a result`);
+  if (a.provisional) whyDo.unshift("Found live during research; re-ranked when research ends");
+  whyDo.push(`${a.cost_jpy == null ? "price not checked yet" : `¥${Number(a.cost_jpy).toLocaleString()}`} · ${a.hours}h of your time · ${a.days_to_outcome} day(s) to a result`);
   const inTotal = a.in_total ?? (a.fits_deadline !== false && a.fits_budget !== false);
   return {
-    id: a.id, type: a.type, kind: draft || url ? "agent" : "you", out: OUT_OF[a.type] || "reply",
+    id: a.id, type: a.type, kind: draft || url ? "agent" : "you", out: OUT_OF[a.type] || "reply", provisional: !!a.provisional, contact: a.contact || "",
     title: a.title, base: a.p, rel: 1, time: 1, warm: 1, chan: 1, // the % is computed in Python; pass it through as-is
     late: !inTotal, lateText: a.fits_deadline === false ? "Too slow for the deadline" : "Over budget",
     cta: draft && url ? "Copy draft & open" : draft ? "Copy the draft" : url ? "Open the link" : "Add to my plan",
@@ -183,7 +185,7 @@ function startJob(body) {
   if (job && !job.done) stopJob();
   const ask = parseAsk(body.ask);
   if (body.name) ask.name = String(body.name).trim();
-  const j = { id: Date.now().toString(36), events: [], clients: new Set(), done: false, child: null, ask };
+  const j = { id: Date.now().toString(36), events: [], clients: new Set(), done: false, child: null, ask, live: [], nonce: randomBytes(9).toString("hex") };
   job = j;
   const push = (ev) => {
     if (job !== j) return;
@@ -230,6 +232,13 @@ function stepHandler(j, groupFor) {
       j.push({ type: "step", id: "si" + sid(t), group: G[0], label: "Sign in needed in your Chrome", status: "locked", note: t });
       return;
     }
+    // A live action card from research (src/leads.ts): show it now, Step 5 re-ranks later. Only lines carrying this
+    // run's nonce count, so text from a web page that ends up in a checklist note can't forge a card.
+    const tag = `ACTION:${j.nonce} `;
+    if (line.startsWith(tag)) {
+      try { const a = JSON.parse(line.slice(tag.length)); j.live.push(a); j.push({ type: "action", action: toUiAction(a) }); } catch {}
+      return;
+    }
     const s = parseLine(line);
     if (!s) { if (line.trim()) j.push({ type: "log", text: line.trim() }); return; }
     if (s.step === "5" && /^\s*[\d.<>]+%/.test(s.label)) return; // per-action lines: the deck shows these
@@ -257,7 +266,7 @@ async function run(j, body) {
     if (body.hint) args.push("--hint", String(body.hint));
     if (body.x_handle) args.push("--x-handle", String(body.x_handle).replace(/^@/, ""));
     for (const u of [].concat(body.event_urls || []).filter(Boolean)) args.push("--event-url", String(u));
-    const r = await runProc(j, process.execPath, args, {}, stepHandler(j, researchGroup));
+    const r = await runProc(j, process.execPath, args, { MEETBLE_ACTION_NONCE: j.nonce }, stepHandler(j, researchGroup));
     if (j.done) return;
     if (r.code !== 0 || !existsSync(RESEARCH)) throw new Error(`Research failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no output"}`);
   }
@@ -265,6 +274,13 @@ async function run(j, body) {
   const t = research.target_id || {};
   push({ type: "meta", name: t.name || ask.name, role: [t.role, t.company].filter(Boolean).join(" · ") });
   for (const ev of findingEvents(research)) push(ev);
+  if (reuse) for (const a of research.live_actions || []) { j.live.push(a); push({ type: "action", action: toUiAction(a) }); }
+  // If Steps 3-5 fail, the live cards found during research are still a usable plan (root cause #4: one big final call).
+  const fallback = (why) => {
+    if (!j.live.length) throw new Error(why);
+    push({ type: "step", id: "s5fallback", group: G[5], label: "Ranking didn't finish; showing the actions found during research", status: "none", note: why.slice(0, 160) });
+    push({ type: "actions", actions: j.live.map(toUiAction), p_total: null, summary: "" });
+  };
 
   // Steps 3-5
   research.goal = { ...(research.goal || {}), meet: ask.meet, ...(ask.budget_jpy ? { budget_jpy: ask.budget_jpy } : {}) };
@@ -272,15 +288,27 @@ async function run(j, body) {
   const pargs = ["-m", "plan", RESEARCH, "--out", PLAN, "--no-interview"];
   if (existsSync(join(ROOT, "user_profile.json"))) pargs.push("--profile", join(ROOT, "user_profile.json"));
   const mtime = () => (existsSync(PLAN) ? statSync(PLAN).mtimeMs : 0), before = mtime();
+  // Steps 3-5 get a hard limit (MEETBLE_PLAN_TIMEOUT_S, default 240 s); past it, the live cards stand in.
+  const planMs = (Number(process.env.MEETBLE_PLAN_TIMEOUT_S) || 240) * 1000;
+  let planTimedOut = false;
+  const planTimer = setTimeout(() => { planTimedOut = true; try { j.child?.kill(); } catch {} }, planMs);
   const r = await runProc(j, PY, pargs, { PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }, stepHandler(j, () => G[5]));
+  clearTimeout(planTimer);
+  if (planTimedOut && !j.done) return fallback(`Steps 3-5 took longer than ${planMs / 1000} s and were stopped`);
   if (j.done) return;
   const planText = mtime() > before ? readFileSync(PLAN, "utf8") : null;
-  if (!planText) throw new Error(`Planning failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no plan written"}`);
-  const plan = JSON.parse(planText.replace(/^﻿/, ""));
+  if (!planText) return fallback(`Planning failed (exit ${r.code}): ${r.err.trim().split("\n").pop() || "no plan written"}`);
+  let plan;
+  try { plan = JSON.parse(planText.replace(/^\uFEFF/, "")); } catch (e) { return fallback(`Plan file was not valid JSON: ${String(e?.message || e).slice(0, 120)}`); }
   if (plan.persona) push({ type: "finding", section: "persona", label: "Summary", claim: plan.persona, via: "Meetble" });
-  const actions = (plan.actions || []).map(toUiAction);
-  push({ type: "actions", actions, p_total: plan.p_total, summary: plan.plan_summary || "" });
-  if (!actions.length) throw new Error("No actions came back from Step 5");
+  const ranked = plan.actions || [];
+  if (!ranked.length) return fallback("No actions came back from Step 5");
+  // Keep live cards Step 5 didn't cover, so a path found during research never disappears. A card is covered when
+  // Step 5 ranked the same route (type + link) and, for routes through a person, names that same person.
+  const coveredBy = (l) => ranked.some((a) => a.type === l.type && (a.channel_url || "") === (l.channel_url || "")
+    && (!l.contact || `${a.title} ${(a.how || []).join(" ")}`.toLowerCase().includes(l.contact.replace(/^@/, "").toLowerCase())));
+  const extra = j.live.filter((l) => !coveredBy(l));
+  push({ type: "actions", actions: [...ranked, ...extra].map(toUiAction), p_total: plan.p_total, summary: plan.plan_summary || "" });
 }
 
 // ---------- sign-ins: read your Chrome's session cookies over CDP (no agent, no tab opened, answers in under a second) ----------

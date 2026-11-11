@@ -1062,6 +1062,9 @@ function onMeta(ev){
 }
 async function runLive(){
   const my = ++runId;
+  // A new run starts with an empty deck: live card ids (live1, live2, ...) restart each run.
+  pTotal = null; actions = []; filter = 'all'; openConfirm = null; cur = 0; Object.keys(status).forEach(k => delete status[k]);
+  $('#planCnt').textContent = ''; $('#tabPlan').disabled = true;
   $('#meBubble').textContent = $('#saidText').textContent;
   setState('Researching…', 'busy'); liveStart();
   const body = { ask: $('#saidText').textContent, hint: $('#dHint').value.trim(), x_handle: $('#dX').value.trim(),
@@ -1087,7 +1090,7 @@ function emit(ev){
   log.push(ev);
   $('#evlog').textContent = log.slice(-60).map(e => JSON.stringify(e)).join('\n');
   $('#evlog').scrollTop = 1e6;
-  ({step:onStep, finding:onFinding, actions:onActions, action_status:onStatus, browse:onBrowse})[ev.type]?.(ev);
+  ({step:onStep, finding:onFinding, action:onLiveAction, actions:onActions, action_status:onStatus, browse:onBrowse})[ev.type]?.(ev);
 }
 
 const ICON = {
@@ -1176,10 +1179,35 @@ const vis = () => actions.filter(a => filter === 'all' || a.out === filter);
 
 function onActions(ev){
   pTotal = typeof ev.p_total === 'number' ? ev.p_total : null;
+  const prev = actions;
   actions = ev.actions.slice().sort((a,b) => pOf(b) - pOf(a));
+  // A live card the person already acted on keeps its status on the ranked card for the same route: same type and
+  // link and, for an intro, the same contact. Not when the ranked card brings a draft, which still needs sending.
+  const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const sameContact = (live, a) => {
+    const c = (live.contact || '').replace(/^@/, '').trim();
+    return !c || new RegExp(`(^|[^\\p{L}\\p{N}_@])@?${reEsc(c)}(?![\\p{L}\\p{N}_])`, 'iu').test(`${a.title} ${(a.how || []).join(' ')}`);
+  };
+  for (const a of actions) {
+    if (a.provisional || status[a.id] || a.draft) continue;
+    const was = prev.find(x => x.provisional && status[x.id] && x.id !== a.id && x.type === a.type && x.url && x.url === a.url && sameContact(x, a));
+    if (was) status[a.id] = { ...status[was.id], id: a.id };
+  }
   cur = 0; dir = 'r';
   $('#tabPlan').disabled = false; $('#planCnt').textContent = actions.length;
   renderFilters(); renderActs(); showTab(true);
+}
+// A live card: research just found a path to the person. It joins the deck now; the final "actions" list re-ranks and replaces the deck.
+function onLiveAction(ev){
+  const a = ev.action;
+  if(!a || actions.some(x => x.id === a.id)) return;
+  const shown = vis()[cur];
+  actions.push(a);
+  actions.sort((x,y) => pOf(y) - pOf(x));
+  if(shown) cur = Math.max(0, vis().indexOf(shown)); // keep the card the person is looking at in front
+  $('#tabPlan').disabled = false; $('#planCnt').textContent = actions.length;
+  if(actions.length === 1) renderFilters();
+  renderActs();
 }
 function renderFilters(){
   $('#filters').innerHTML = [['all','All'], ...Object.entries(OUT)].map(([k,v]) =>
@@ -1191,7 +1219,7 @@ $('#filters').addEventListener('click', e => { const b = e.target.closest('[data
 function control(a){
   const st = status[a.id], locked = a.acct && !isOn(a.acct);
   if(st) return statusPill(st);
-  return `<button class="do big" type="button" data-do="${a.id}" ${a.late||locked?'disabled':''}>${locked ? 'Link ' + acctName(a.acct) + ' first' : a.late ? esc(a.lateText || 'Too slow for the deadline') : esc(a.cta)}</button>`;
+  return `<button class="do big" type="button" data-do="${esc(a.id)}" ${a.late||locked?'disabled':''}>${locked ? 'Link ' + acctName(a.acct) + ' first' : a.late ? esc(a.lateText || 'Too slow for the deadline') : esc(a.cta)}</button>`;
 }
 function confirmBox(a){
   if(openConfirm !== a.id) return '';
@@ -1199,7 +1227,7 @@ function confirmBox(a){
     <div class="who">${a.acct ? `Uses your <b>${acctName(a.acct)}</b>` : 'Uses none of your accounts'} · ${esc(a.doWhat)}</div>
     ${a.draft ? `<div class="draft">${esc(a.draft)}</div>` : ''}
     <div class="btns"><label><input type="checkbox" id="skipConfirm"> Don't ask again</label>
-      <button class="ghost" type="button" data-cancel="1">Cancel</button><button class="do" type="button" data-ok="${a.id}">Confirm</button></div>
+      <button class="ghost" type="button" data-cancel="1">Cancel</button><button class="do" type="button" data-ok="${esc(a.id)}">Confirm</button></div>
   </div>`;
 }
 const kindTag = a => `<span class="kind ${a.kind}">${a.kind === 'agent' ? 'Agent does it' : 'You go'}</span>`;

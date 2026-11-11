@@ -15,6 +15,12 @@ export class FindingStore {
   private items: Finding[] = [];
   private keys = new Set<string>();
   private seq = 0;
+  private listeners: Array<(f: Finding) => void> = [];
+
+  /** Called for every newly saved finding, as soon as it is saved (rules and live action cards hang off this). */
+  onSave(fn: (f: Finding) => void): void {
+    this.listeners.push(fn);
+  }
 
   /** Returns the saved finding, or null if it was a duplicate or had no valid source_url. */
   save(f: NewFinding): Finding | null {
@@ -25,6 +31,9 @@ export class FindingStore {
     this.keys.add(key);
     const saved: Finding = { ...f, claim: f.claim.trim(), id: `f${++this.seq}` };
     this.items.push(saved);
+    for (const fn of this.listeners) {
+      try { fn(saved); } catch { /* a listener must never break a tool */ }
+    }
     return saved;
   }
 

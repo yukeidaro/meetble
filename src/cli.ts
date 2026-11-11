@@ -65,7 +65,8 @@ const ctx: ToolContext = {
   now: () => new Date(),
   emit: (e) => {
     events.push(e);
-    console.log(`${ICON[e.status]} ${e.label}${e.note ? ` (${e.note})` : ""}`);
+    const one = (t: string) => t.replace(/[\r\n]+/g, " "); // one checklist line per event, whatever a source page contained
+    console.log(`${ICON[e.status]} ${one(e.label)}${e.note ? ` (${one(e.note)})` : ""}`);
   },
   findings: new FindingStore(),
 };
@@ -85,7 +86,14 @@ async function waitForLogin(c: LoginCheckResult): Promise<boolean> {
   return !skipLogin;
 }
 let skipLogin = false;
-const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls, waitForLogin }, ctx);
+const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls, waitForLogin,
+  // One line per live action card; server.mjs forwards each to the UI the moment it appears.
+  // The nonce comes from server.mjs, so a checklist note can't pass itself off as a card.
+  onAction: (a) => console.log(`ACTION${process.env.MEETBLE_ACTION_NONCE ? `:${process.env.MEETBLE_ACTION_NONCE}` : ""} ${JSON.stringify(a)}`) }, ctx);
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, JSON.stringify({ ...result, events_log: events }, null, 2), "utf8");
-console.log(`\n${result.findings.length} findings saved to ${out}`);
+console.log(`\n${result.findings.length} findings, ${result.live_actions.length} live actions in ${result.timing.elapsed_s} s, saved to ${out}`);
+// A step cut off by the time budget may still have a child process (browser-use) open; don't wait for it.
+// Exit only after stdout has flushed (pipes are async on POSIX), so the last ACTION lines reach the server.
+setTimeout(() => process.exit(0), 5_000).unref();
+process.stdout.write("", () => process.exit(0));
