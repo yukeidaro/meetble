@@ -55,7 +55,7 @@ button{cursor:pointer;-webkit-tap-highlight-color:transparent}
 
 /* ---------- intro: ask + link accounts ---------- */
 #intro{max-width:720px;margin:0 auto;display:flex;flex-direction:column;align-items:center;padding-block:3vh 48px}
-.orb-wrap{width:400px;height:400px;margin:-70px 0 -80px;cursor:pointer;touch-action:manipulation;transition:width .8s cubic-bezier(.2,.8,.2,1),height .8s cubic-bezier(.2,.8,.2,1),margin .8s}
+.orb-wrap{width:440px;height:440px;margin:-84px 0 -96px;touch-action:manipulation;transition:width .8s cubic-bezier(.2,.8,.2,1),height .8s cubic-bezier(.2,.8,.2,1),margin .8s}
 body.s-connect .orb-wrap{width:210px;height:210px;margin:-44px 0 -50px}
 .orb-wrap canvas{width:100%;height:100%;display:block}
 .kicker{font-family:var(--fm);font-size:11.5px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-top:6px}
@@ -433,22 +433,79 @@ body.s-run #run{display:grid;animation:rise .7s cubic-bezier(.2,.8,.2,1)}
 
 /* living background */
 #bgFlow{position:fixed;left:-10vw;top:-10vh;width:120vw;height:120vh;z-index:-3;pointer-events:none;filter:blur(28px) saturate(1.15);transition:opacity .8s}
-#bgBubbles{position:fixed;inset:0;width:100vw;height:100vh;z-index:-2;pointer-events:none;transition:opacity .8s}
 #grain{position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:.6}
-body.s-run #bgBubbles{opacity:.3}
-body.s-run #bgFlow{opacity:.7}
+body.s-run body.s-run #bgFlow{opacity:.7}
+
+/* ---------- motion pass: the page moves and changes color with the orb ---------- */
+:root{--p1:#a99bff;--p2:#f3a6cf;--p3:#8fd0ff;--t1:#5b4fd6;--t2:#c2468a;--t3:#2c7fc4}
+@property --ang{syntax:'<angle>';inherits:false;initial-value:0deg}
+@keyframes angspin{to{--ang:360deg}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes textflow{to{background-position:200% 0}}
+@keyframes sheen{0%,55%{transform:translateX(-130%)}100%{transform:translateX(130%)}}
+@keyframes pop{0%{transform:scale(.9)}60%{transform:scale(1.06)}100%{transform:none}}
+@keyframes shimmer{from{background-position:150% 0}to{background-position:-50% 0}}
+@keyframes glowpulse{0%,100%{opacity:.4;transform:scale(1)}50%{opacity:.8;transform:scale(1.05)}}
+@keyframes gobreathe{0%,100%{box-shadow:0 12px 30px -12px var(--p2)}50%{box-shadow:0 18px 50px -8px var(--p1)}}
+@keyframes nkflash{from{background:color-mix(in srgb,var(--p1) 24%,transparent)}to{background:transparent}}
+@keyframes dotsdrift{to{background-position:28px 56px}}
+/* background, round two */
+#bgFlow{filter:blur(24px)}
+#dots{position:fixed;inset:0;z-index:-3;pointer-events:none;opacity:.5;transition:opacity 1s;background-image:radial-gradient(circle at 1px 1px,color-mix(in srgb,var(--ink) 20%,transparent) 1px,transparent 1.6px);background-size:28px 28px;
+  -webkit-mask-image:radial-gradient(ellipse 85% 75% at 50% 42%,transparent 30%,#000 64%,transparent 100%);mask-image:radial-gradient(ellipse 85% 75% at 50% 42%,transparent 30%,#000 64%,transparent 100%);animation:dotsdrift 26s linear infinite}
+#edgeGlow{position:fixed;inset:0;width:100vw;height:100vh;z-index:60;pointer-events:none;opacity:0;transition:opacity 1.2s ease}
+body.working #edgeGlow{opacity:.85}
+body.s-run #dots{opacity:.22}
+/* header: the logo starts over */
+.top{position:relative;z-index:5}
+button.brand{border:0;background:none;margin:0;padding:6px 10px 6px 0;color:var(--ink);font:inherit;font-weight:600;font-size:15px;letter-spacing:-.01em}
+.brand svg{animation:spin 18s linear infinite}
+.brand:hover svg{animation-duration:2s}
+.brand::after{content:"Start over";font-weight:400;font-size:12.5px;color:var(--muted);opacity:0;transform:translateX(-6px);transition:opacity .25s,transform .25s}
+.brand:hover::after,.brand:focus-visible::after{opacity:1;transform:none}
+/* type that takes the orb's colors */
+.kicker{font-size:12.5px;font-weight:600;letter-spacing:.16em;color:var(--t1);background:linear-gradient(90deg,var(--t1),var(--t2),var(--t3),var(--t1));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:textflow 10s linear infinite}
+.hello b{font-weight:600;color:var(--t1);background:linear-gradient(100deg,var(--t1),var(--t2),var(--t3),var(--t1));background-size:200% 100%;-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;animation:textflow 7s linear infinite}
+/* the input glows and its border runs */
+.ask{position:relative}
+.ask::before{content:"";position:absolute;left:6%;right:6%;top:10px;height:60px;border-radius:40px;z-index:-1;pointer-events:none;background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3));filter:blur(30px);animation:glowpulse 4.2s ease-in-out infinite}
+.ask-bar{position:relative}
+.ask-bar::before,.acct.on::before,.dcard::before{content:"";position:absolute;inset:-1px;border-radius:inherit;padding:1.5px;pointer-events:none;background:conic-gradient(from var(--ang),var(--p1),var(--p2),var(--p3),var(--p1));-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;animation:angspin 5s linear infinite}
+.ask-bar::before{opacity:.7;transition:opacity .3s}
+.ask-bar:focus-within::before{opacity:1}
+.send,.go{position:relative;overflow:hidden;isolation:isolate}
+.send::before,.go::before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.32) 50%,transparent 65%);transform:translateX(-130%);animation:sheen 3.6s ease-in-out infinite}
+.go{animation:gobreathe 4.2s ease-in-out infinite}
+/* accounts light up */
+.acct:hover{transform:translateY(-3px);box-shadow:var(--shadow),0 16px 34px -20px var(--p1)}
+.acct.on::before{animation-duration:4s}
+.acct.on .ic{background:linear-gradient(135deg,var(--p1),var(--p2));box-shadow:0 6px 18px -6px var(--p1)}
+.acct.pop{animation:pop .5s cubic-bezier(.3,1.6,.5,1)}
+.pips i{position:relative;overflow:hidden}
+.pips i.lit,.pips i.lit:nth-child(n+5){background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3))}
+.pips i.lit::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(255,255,255,.85),transparent);transform:translateX(-100%);animation:sheen 2.6s ease-in-out infinite}
+/* research: rows shimmer while running, cards lift, new niche details flash */
+.ln.running{background:linear-gradient(90deg,transparent 20%,color-mix(in srgb,var(--p1) 24%,transparent) 50%,transparent 80%);background-size:250% 100%;animation:shimmer 1.8s linear infinite;border-radius:8px}
+.ln.done .ico{animation:pop .45s cubic-bezier(.3,1.6,.5,1)}
+.box{transition:transform .35s cubic-bezier(.2,.8,.2,1),box-shadow .35s}
+.box:hover{transform:translateY(-2px);box-shadow:var(--shadow),0 24px 50px -30px var(--p2)}
+.nbox::before{padding:1.5px;background:conic-gradient(from var(--ang),var(--p1),transparent 22%,var(--p2) 50%,transparent 72%,var(--p1));animation:angspin 6s linear infinite}
+.fact.nk{border-top:0;border-radius:14px;margin:2px -10px;padding:12px 10px;animation:rise .45s cubic-bezier(.2,.8,.2,1),nkflash 2s ease-out}
+.live.on{box-shadow:var(--shadow),0 0 0 1px color-mix(in srgb,var(--p1) 45%,transparent),0 18px 40px -24px var(--p1)}
+.me{background:linear-gradient(135deg,var(--ink),color-mix(in srgb,var(--ink) 72%,var(--t1)))}
+/* the action deck glows */
+.dcard{box-shadow:var(--shadow),0 30px 70px -36px var(--p2)}
+.dcard::before{inset:0;background:conic-gradient(from var(--ang),var(--p1),transparent 28%,var(--p2) 52%,transparent 76%,var(--p1))}
+.pbar .trk i{background:linear-gradient(90deg,var(--p1),var(--p2),var(--p3))}
 </style>
 </head>
 <body>
 
 
-<canvas id="bgFlow" aria-hidden="true"></canvas><canvas id="bgBubbles" aria-hidden="true"></canvas><div id="grain" aria-hidden="true"></div>
+<canvas id="bgFlow" aria-hidden="true"></canvas><div id="dots" aria-hidden="true"></div><div id="grain" aria-hidden="true"></div><canvas id="edgeGlow" aria-hidden="true"></canvas>
 
 <header class="top">
-  <div class="brand"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.6 2.2"/><circle cx="9" cy="9" r="2.6" fill="currentColor"/></svg>Meetble</div>
-  <div class="top-r">
-    <button class="tbtn" id="resetBtn" type="button">Restart</button>
-  </div>
+  <button class="brand" id="homeBtn" type="button" title="Start over" aria-label="Meetble, start over"><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="7.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-dasharray="1.6 2.2"/><circle cx="9" cy="9" r="2.6" fill="currentColor"/></svg>Meetble</button>
 </header>
 
 <main id="intro">
@@ -474,7 +531,7 @@ body.s-run #bgFlow{opacity:.7}
       <div class="pips" id="pips"></div>
       <span class="tracks" id="depthTracks"></span>
     </div>
-    <div class="details" id="details">
+    <div class="details" id="details" hidden>
       <input id="dHint" placeholder="Who they are, to tell same-name people apart (e.g. YC partner)" aria-label="Hint">
       <input id="dX" placeholder="X handle (optional)" aria-label="X handle">
       <input id="dEvent" placeholder="Event URL you are both at (optional)" aria-label="Event URL">
@@ -534,7 +591,7 @@ body.s-run #bgFlow{opacity:.7}
     <div class="pane" id="panePlan" hidden>
       <div class="total card">
         <div class="ring">
-          <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--a1)"/><stop offset="1" style="stop-color:var(--a2)"/></linearGradient></defs>
+          <svg viewBox="0 0 100 100" aria-hidden="true"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" style="stop-color:var(--p1)"/><stop offset="1" style="stop-color:var(--p2)"/></linearGradient></defs>
             <circle class="rt" cx="50" cy="50" r="44"/><circle class="rv" id="ringV" cx="50" cy="50" r="44"/></svg>
           <div class="big" id="big">–</div>
         </div>
@@ -559,13 +616,14 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':
 const EXAMPLE = 'Meet Boris Jabes before 22:45 tonight, in person for 5 minutes. Budget ¥30,000.';
 
 /* ---------- the agent orb: port of Grace's Lock-in Orb (LOCKIN_ORB_VISUAL_HANDOFF.md) ---------- */
-const ORB_PALETTES = [ // Monet palettes from 《光與壑》, ordered so each blends into the next
-  ['#B0C4DE','#D8BFD8','#6495ED','#E6E6FA','#778899','#F8F8FF'], // spring night
-  ['#B0C4DE','#D8BFD8','#E6E6FA','#C0C0C0','#F0F8FF','#ADD8E6'], // summer sunset
-  ['#FFDAB9','#EE82EE','#FFB6C1','#F0E68C','#87CEFA','#FFF0F5'], // spring sunset
-  ['#F2D7EE','#FFFACD','#E0FFFF','#FFB7C5','#98FB98','#E6E6FA'], // spring morning
-  ['#E0FFFF','#FFDEAD','#F0FFF0','#FFC0CB','#00BFFF','#FAFAD2'], // summer morning
-  ['#FFFFFF','#F8F8FF','#E0FFFF','#D8BFD8','#B0E0E6','#E6E6FA'], // winter noon
+const ORB_PALETTES = [ // Monet palettes from 《光與壑》, ordered around the color wheel so the page keeps changing color
+  ['#B0E0E6','#ADD8E6','#87CEFA','#F0F8FF','#FFFFFF','#F5F5F5'], // spring noon: sky
+  ['#B0C4DE','#D8BFD8','#6495ED','#E6E6FA','#778899','#F8F8FF'], // spring night: blue
+  ['#B0C4DE','#778899','#C0C0C0','#D8BFD8','#87CEFA','#FFB6C1'], // winter sunset: violet
+  ['#FFDAB9','#EE82EE','#FFB6C1','#F0E68C','#87CEFA','#FFF0F5'], // spring sunset: pink
+  ['#AFEEEE','#8FBC8F','#FFFACD','#FFB6C1','#D8BFD8','#E9967A'], // summer noon: peach
+  ['#F2D7EE','#FFFACD','#E0FFFF','#FFB7C5','#98FB98','#E6E6FA'], // spring morning: butter
+  ['#E0FFFF','#FFDEAD','#F0FFF0','#FFC0CB','#00BFFF','#FAFAD2'], // summer morning: mint
 ];
 const TAU = Math.PI * 2, WHITE = [255,255,255], INK = [12,14,34];
 const noise3 = (() => {
@@ -617,14 +675,15 @@ const HARM = ORB_PALETTES.map(p => harmonize(p.map(hexc)));
 const layer = () => { const c = document.createElement('canvas'); return [c, c.getContext('2d')]; };
 
 // One color clock for both orbs and the background: colors flow continuously from palette to palette.
-const PAL = {p:0, last:performance.now(), stamp:-1, e:0, kick:0, cur:HARM[0].map(c => c.slice()), glow:[200,200,240]};
+const PAL = {p:0, last:performance.now(), stamp:-1, e:0, kick:0, cur:HARM[0].map(c => c.slice()), nxt:HARM[1].map(c => c.slice()), glow:[200,200,240]};
 function palTick(now){
   if(now === PAL.stamp) return PAL;
   const dt = Math.min(.1, Math.max(0, (now - PAL.last)/1000)); PAL.stamp = PAL.last = now;
   PAL.kick = Math.max(0, PAL.kick - dt);
-  PAL.p = (PAL.p + dt*(RM ? .03 : .28 + .35*PAL.e + 1.4*PAL.kick)) % HARM.length; // about 3.5 s per palette, faster while working or when tapped
+  PAL.p = (PAL.p + dt*(RM ? .01 : .05 + .05*PAL.e)) % HARM.length; // about 20 s per palette: calm, not flashy
   const i = Math.floor(PAL.p), f = smooth(0, 1, PAL.p - i), A = HARM[i], B = HARM[(i + 1) % HARM.length];
-  for(let k = 0; k < 6; k++) for(let j = 0; j < 3; j++) PAL.cur[k][j] = A[k][j] + (B[k][j] - A[k][j])*f;
+  const C = HARM[(i + 2) % HARM.length];
+  for(let k = 0; k < 6; k++) for(let j = 0; j < 3; j++){ PAL.cur[k][j] = A[k][j] + (B[k][j] - A[k][j])*f; PAL.nxt[k][j] = B[k][j] + (C[k][j] - B[k][j])*f; }
   let r = 0, g = 0, b = 0, ws = 0;
   for(const c of PAL.cur){ const w = (Math.max(...c) - Math.min(...c) + 25)**2; r += c[0]*w; g += c[1]*w; b += c[2]*w; ws += w; }
   PAL.glow = [r/ws, g/ws, b/ws];
@@ -633,6 +692,8 @@ function palTick(now){
 // 2×2 matrices [m11, m12, m21, m22]: a stretch along angle a, and a product
 const stretch = (a, sx, sy) => { const c = Math.cos(a), s = Math.sin(a), k = c*s*(sx - sy); return [c*c*sx + s*s*sy, k, k, s*s*sx + c*c*sy]; };
 const mat = (A, B) => [A[0]*B[0] + A[1]*B[2], A[0]*B[1] + A[1]*B[3], A[2]*B[0] + A[3]*B[2], A[2]*B[1] + A[3]*B[3]];
+const tone = (c, ds, l) => { const [h, s] = rgb2hsl(c); return hsl2rgb([h, clamp(s + ds, 0, .9), l]); }; // same hue, chosen strength
+const toHex = c => '#' + c.map(v => clamp(Math.round(v), 0, 255).toString(16).padStart(2, '0')).join('');
 const vivid = c => { const [h, s, l] = rgb2hsl(c); return hsl2rgb([h, Math.max(s, .5), clamp(l, .58, .72)]); }; // a glow that still shows on a light page
 const MASK = [[0,1],[.5,1],[.66,.93],[.78,.74],[.87,.48],[.94,.22],[1,0]]; // soft edge: no hard rim
 
@@ -677,7 +738,7 @@ class Orb{
     const dx = noise3(nx + e, ny, z) - noise3(nx - e, ny, z), dy = noise3(nx, ny + e, z) - noise3(nx, ny - e, z), m = Math.hypot(dx, dy) || 1;
     return [dy/m, -dx/m];
   }
-  stepP(dt){ // light strands into the persistent trail buffer
+  stepP(dt, bright = 1){ // light strands into the persistent trail buffer
     const x = this.tx, k = dt*60, R = this.R, z = .08*this.t, spin = .38 + .5*this.energy, D = this.D, pal = PAL.cur;
     x.setTransform(1,0,0,1,0,0); x.globalCompositeOperation = 'destination-out';
     x.fillStyle = `rgba(0,0,0,${1 - (1 - .025)**k})`; x.fillRect(0, 0, this.trail.width, this.trail.height);
@@ -690,7 +751,7 @@ class Orb{
       p.vx += (tx - p.vx)*relax; p.vy += (ty - p.vy)*relax;
       const ox = p.x, oy = p.y; p.x += p.vx*k; p.y += p.vy*k; p.age += k;
       if(p.age >= p.life || Math.hypot(p.x, p.y) > 1.15*R){ this.spawnP(p); continue; }
-      const life = p.age/p.life, al = p.a*Math.sin(Math.PI*life)**2*(1 - smooth(.45*R, .95*R, r))*(.35 + .65*(.5 + .5*Math.sin(this.t*p.fr + p.ph)))*(1 + .5*this.energy);
+      const life = p.age/p.life, al = p.a*Math.sin(Math.PI*life)**2*(1 - smooth(.45*R, .95*R, r))*(.35 + .65*(.5 + .5*Math.sin(this.t*p.fr + p.ph)))*(1 + .5*this.energy)*bright;
       if(al < .003) continue;
       x.strokeStyle = rgba(mixc(pal[p.ci], WHITE, .45), al); x.lineWidth = p.w;
       x.beginPath(); x.moveTo(ox, oy); x.lineTo(p.x, p.y); x.stroke();
@@ -709,21 +770,21 @@ class Orb{
     const P = palTick(now), pal = P.cur, glow = P.glow;
     this.t += dt; this.tw += (.3 + .6*this.energy)*dt;
     const R = this.R, U = this.U, D = this.D, t = this.t, W = this.W, H = this.H, fl = RM ? 0 : this.fl;
+    const b0 = .5 + .5*Math.sin(t*TAU/4.2), br = RM ? .6 : b0*b0*(3 - 2*b0); // breathing: one slow in-and-out every 4.2 s
     // bubble motion: random jiggles on a spring, a slow float, a lean toward the cursor
     if(!RM){
       this.kickIn -= dt;
-      if(this.kickIn <= 0){ const a = Math.random()*TAU, v = R*(1.2 + Math.random()*1.6)*(1 + this.energy); this.jv[0] += Math.cos(a)*v; this.jv[1] += Math.sin(a)*v; this.kickIn = 1.1 + Math.random()*2.1 - this.energy; }
       for(let i = 0; i < 2; i++){
         this.jv[i] += (-140*this.j[i] - 7*this.jv[i])*dt; this.j[i] += this.jv[i]*dt;
         this.lv[i] += (this.lean[i] - this.lv[i])*(1 - Math.exp(-5*dt));
       }
     }
-    const ox = (noise3(t*.21, 3.1, .5)*.22*R + this.j[0] + this.lv[0])*fl;
-    const oy = (Math.sin(t*1.05)*.06*R + noise3(t*.19, 7.7, .5)*.14*R + this.j[1] + this.lv[1])*fl;
+    const ox = (noise3(t*.12, 3.1, .5)*.07*R + this.j[0])*fl;
+    const oy = (Math.sin(t*.7)*.03*R + noise3(t*.11, 7.7, .5)*.05*R + this.j[1])*fl;
     const sA = clamp(Math.hypot(this.jv[0], this.jv[1])/R*.05, 0, .16)*fl, aA = Math.atan2(this.jv[1], this.jv[0]); // stretch along the jiggle
-    const sW = .035*Math.sin(2.2*t)*fl, sB = 1 + .022*Math.sin(1.2*t) + .012*this.energy*Math.sin(4.6*t);
+    const sW = .012*Math.sin(1.4*t)*fl, sB = 1 + .035*(2*br - 1) + .012*this.energy*Math.sin(4.6*t);
     const T = mat(stretch(aA, 1 + sA, 1 - sA*.8), stretch(.5*t, 1 + sW, 1 - sW)).map(v => v*sB);
-    this.stepP(dt);
+    this.stepP(dt, .7 + .9*br + .4*this.energy);
     // bloom
     const g = this.gx; g.setTransform(1,0,0,1,0,0); g.clearRect(0, 0, this.bloom.width, this.bloom.height); g.drawImage(this.trail, 0, 0, this.bloom.width, this.bloom.height);
     // body, in orb space; E reaches past R because the wobbly mask does
@@ -755,6 +816,36 @@ class Orb{
       f.fillStyle = fr; f.fillRect(-E, -E, 2*E, 2*E);
       b.setTransform(1,0,0,1,0,0); b.globalAlpha = .26 + .12*this.energy; b.drawImage(this.film, 0, 0); b.globalAlpha = 1; home();
     }
+    // light running inside: comet ribbons on tilted orbits, brighter on each in-breath
+    b.globalCompositeOperation = 'lighter'; b.lineCap = 'round';
+    for(let i = 0; i < 3; i++){
+      const dir = i % 2 ? -1 : 1, rr = R*(.3 + .17*i)*(1 + .06*Math.sin(t*.8 + i)), sw = 1.25 + .5*Math.sin(t*.6 + i*1.3);
+      const a0 = dir*t*(.85 + .3*i)*(1 + 1.4*this.energy) + i*2.1, col = tone(pal[(i*2 + 1) % 6], .35, .74), k = (.35 + .65*br)*(1 + .7*this.energy);
+      b.save(); b.rotate(i*1.05 + .25*Math.sin(t*.3 + i)); b.scale(1, .42 + .14*Math.sin(t*.5 + i*2));
+      for(const [w, al] of [[.26, .06], [.12, .16], [.045, .62]]){
+        const A = rgba(col, al*k); let st = A;
+        if(b.createConicGradient){ // a comet: bright head where it is going, tail fading behind
+          const cg = b.createConicGradient(a0, 0, 0), f = sw/TAU, Z = rgba(col, 0);
+          if(dir > 0){ cg.addColorStop(0, Z); cg.addColorStop(f*.8, A); cg.addColorStop(f, A); cg.addColorStop(f + .002, Z); }
+          else { cg.addColorStop(0, A); cg.addColorStop(f*.2, A); cg.addColorStop(f, Z); }
+          cg.addColorStop(1, Z); st = cg;
+        }
+        b.strokeStyle = st; b.lineWidth = w*R; b.beginPath(); b.arc(0, 0, rr, a0, a0 + sw); b.stroke();
+      }
+      const ha = dir > 0 ? a0 + sw : a0, hx = Math.cos(ha)*rr, hy = Math.sin(ha)*rr, hg = b.createRadialGradient(hx, hy, 0, hx, hy, .09*R); // the comet's bright head
+      hg.addColorStop(0, rgba(WHITE, .85*k)); hg.addColorStop(.35, rgba(col, .5*k)); hg.addColorStop(1, rgba(col, 0));
+      b.fillStyle = hg; b.fillRect(hx - .09*R, hy - .09*R, .18*R, .18*R);
+      b.restore();
+    }
+    // a core of light that swells and fades with the breath
+    b.globalCompositeOperation = 'screen';
+    const cr = R*(.42 + .24*br), cc = tone(glow, .3, .7), core = b.createRadialGradient(-.06*R, -.1*R, 0, -.06*R, -.1*R, cr);
+    core.addColorStop(0, rgba(cc, .26 + .4*br)); core.addColorStop(.5, rgba(cc, .1 + .18*br)); core.addColorStop(1, rgba(cc, 0));
+    b.fillStyle = core; b.fillRect(-E, -E, 2*E, 2*E);
+    b.globalCompositeOperation = 'lighter';
+    const hot = b.createRadialGradient(-.06*R, -.1*R, 0, -.06*R, -.1*R, R*(.14 + .08*br));
+    hot.addColorStop(0, rgba(WHITE, .12 + .3*br)); hot.addColorStop(1, rgba(WHITE, 0));
+    b.fillStyle = hot; b.fillRect(-E, -E, 2*E, 2*E);
     b.globalCompositeOperation = 'lighter';
     b.globalAlpha = .95; b.drawImage(this.bloom, -W/2, -H/2, W, H);
     b.globalAlpha = .85; b.drawImage(this.trail, -W/2, -H/2, W, H);
@@ -785,7 +876,7 @@ class Orb{
     }
     b.setTransform(1,0,0,1,0,0); b.globalCompositeOperation = 'destination-in'; b.drawImage(this.mask, 0, 0); b.globalCompositeOperation = 'source-over';
     // main canvas: halos, then the body, floating and stretched like jelly
-    const x = this.x, ga = .36 + .18*this.energy;
+    const x = this.x, ga = .44 + .4*br + .18*this.energy; // the glow breathes too
     x.setTransform(1,0,0,1,0,0); x.clearRect(0, 0, this.c.width, this.c.height);
     x.setTransform(D*T[0], D*T[2], D*T[1], D*T[3], (W/2 + ox)*D, (H/2 + oy)*D);
     const halo = (cx, cy, rad, col, a) => {
@@ -793,29 +884,26 @@ class Orb{
       [[0,1],[.35,.8],[.55,.42],[.75,.14],[1,0]].forEach(([o, k]) => h.addColorStop(o, rgba(col, a*k)));
       x.fillStyle = h; x.fillRect(cx - rad, cy - rad, 2*rad, 2*rad);
     };
-    halo(0, 0, 1.62*R, vivid(glow), ga);
+    halo(0, 0, 1.62*R*(1 + .08*br), vivid(glow), ga);
     halo(Math.cos(.23*t)*.16*R, Math.sin(.31*t)*.16*R, 1.4*R, vivid(mixc(pal[2], pal[4], .5 + .5*Math.sin(.21*t))), .55*ga);
+    const au = mixc(vivid(glow), WHITE, .4), ar = x.createRadialGradient(0, 0, R*.7, 0, 0, R*1.36); // a ring of light that swells with each breath
+    ar.addColorStop(0, rgba(au, 0)); ar.addColorStop(.48, rgba(au, .18 + .42*br)); ar.addColorStop(1, rgba(au, 0));
+    x.fillStyle = ar; x.fillRect(-1.4*R, -1.4*R, 2.8*R, 2.8*R);
     x.drawImage(this.body, -W/2, -H/2, W, H);
   }
 }
 const bigOrb = new Orb($('#bigOrb')), miniOrb = new Orb($('#miniOrb'), {strands:140, sparks:30, float:.6});
-{ // hover leans the bubble toward you; a tap makes it jiggle and stirs the colors
-  const w = $('.orb-wrap'), rel = e => { const r = bigOrb.c.getBoundingClientRect(); return [e.clientX - r.left - r.width/2, e.clientY - r.top - r.height/2]; };
-  w.addEventListener('pointermove', e => { const [px, py] = rel(e); bigOrb.lean = [px*.08, py*.08]; });
-  w.addEventListener('pointerleave', () => { bigOrb.lean = [0, 0]; });
-  w.addEventListener('pointerdown', e => bigOrb.poke(...rel(e)));
-}
 
-/* ---------- living background: color fields from the orb's palette, the orb's light, floating soap bubbles ---------- */
+/* ---------- living background: color fields from the orb's palette, the orb's light, a Siri-style edge glow while working ---------- */
 (() => {
-  const fc = $('#bgFlow'), fx = fc.getContext('2d'), bc = $('#bgBubbles'), bx = bc.getContext('2d');
+  const fc = $('#bgFlow'), fx = fc.getContext('2d'), ec = $('#edgeGlow'), ex = ec.getContext('2d'), orbEl = $('#bigOrb');
+  let varT = -1e9, working = false;
   const root = document.documentElement, mq = matchMedia('(prefers-color-scheme: dark)');
   const isDark = () => root.dataset.theme === 'dark' || (root.dataset.theme !== 'light' && mq.matches);
   let W = 0, H = 0, D = 1, t = 0, last = performance.now();
-  const spawn = (b, first) => { const z = Math.random(); return Object.assign(b, {x:Math.random(), y:first ? Math.random() : 1.08 + Math.random()*.15, r:5 + z*z*34, z, vy:.01 + z*.022, ph:Math.random()*TAU, sw:.008 + Math.random()*.02, ci:Math.random()*6|0}); };
-  const bubbles = Array.from({length:22}, () => spawn({}, true));
   const size = () => { W = innerWidth; H = innerHeight; D = Math.min(devicePixelRatio || 1, 1.5);
-    fc.width = Math.max(40, Math.round(W/9)); fc.height = Math.max(30, Math.round(H/9)); bc.width = Math.round(W*D); bc.height = Math.round(H*D); };
+    fc.width = Math.max(40, Math.round(W/9)); fc.height = Math.max(30, Math.round(H/9));
+    ec.width = Math.max(40, Math.round(W/8)); ec.height = Math.max(30, Math.round(H/8)); };
   addEventListener('resize', size); size();
   { // film grain, made once
     const g = document.createElement('canvas'); g.width = g.height = 140; const c = g.getContext('2d'), im = c.createImageData(140, 140);
@@ -824,36 +912,40 @@ const bigOrb = new Orb($('#bigOrb')), miniOrb = new Orb($('#miniOrb'), {strands:
   }
   function frame(now){
     requestAnimationFrame(frame);
-    const dt = Math.min(.05, Math.max(0, (now - last)/1000)); last = now; t += RM ? 0 : dt;
-    const P = palTick(now), pal = P.cur, dk = isDark(), lift = c => dk ? mixc(c, INK, .5) : mixc(c, WHITE, .5);
+    if(W !== innerWidth || H !== innerHeight) size(); // also covers a page that loaded while hidden (size 0)
+    if(!W || !H) return;
+    const dt = Math.min(.05, Math.max(0, (now - last)/1000)); last = now; t += RM ? 0 : dt*(1 + 1.2*PAL.e); // everything moves faster while the agent works
+    const P = palTick(now), pal = P.cur, dk = isDark();
+    if(now - varT > 80){ varT = now; // the page's accent colors follow the orb
+      const vs = pal.map(c => [rgb2hsl(c)[1], c]).sort((a, b) => b[0] - a[0]);
+      for(let i = 0; i < 3; i++){ root.style.setProperty('--p' + (i + 1), toHex(tone(vs[i][1], .3, dk ? .66 : .7))); root.style.setProperty('--t' + (i + 1), toHex(tone(vs[i][1], .4, dk ? .78 : .46))); }
+    }
+    const busy = PAL.e > .3 && document.body.classList.contains('s-run');
+    if(busy !== working){ working = busy; document.body.classList.toggle('working', busy); }
     // 1) slow color fields, painted small and blurred by CSS
     const w = fc.width, h = fc.height; fx.setTransform(1,0,0,1,0,0); fx.clearRect(0, 0, w, h);
-    for(let i = 0; i < 5; i++){
-      const cx = (.5 + .6*noise3(i*2.3, t*.05, 1.7))*w, cy = (.5 + .6*noise3(i*2.3 + 9, t*.045, 4.1))*h, rr = (.32 + .14*(1 + noise3(i, t*.07, 8.2)))*Math.max(w, h);
-      const c = lift(pal[(i*2 + 1) % 6]), g = fx.createRadialGradient(cx, cy, 0, cx, cy, rr);
-      g.addColorStop(0, rgba(c, dk ? .5 : .55)); g.addColorStop(.55, rgba(c, dk ? .16 : .2)); g.addColorStop(1, rgba(c, 0));
+    for(let i = 0; i < 6; i++){ // vivid enough to read as color, not a tint
+      const cx = (.5 + .66*noise3(i*2.3, t*.085, 1.7))*w, cy = (.5 + .66*noise3(i*2.3 + 9, t*.075, 4.1))*h, rr = (.28 + .14*(1 + noise3(i, t*.1, 8.2)))*Math.max(w, h);
+      const src = i % 2 ? P.nxt[i] : pal[i], c = dk ? tone(src, .1, .3) : tone(src, .12, .9), g = fx.createRadialGradient(cx, cy, 0, cx, cy, rr);
+      g.addColorStop(0, rgba(c, dk ? .5 : .55)); g.addColorStop(.55, rgba(c, dk ? .18 : .2)); g.addColorStop(1, rgba(c, 0));
       fx.fillStyle = g; fx.fillRect(0, 0, w, h);
     }
     // 2) the orb lights the room around it
-    const o = $('#bigOrb').getBoundingClientRect();
+    const o = orbEl.getBoundingClientRect();
     if(o.width){
       const cx = (o.left + o.width/2)/W*w*(10/12) + w/12, cy = (o.top + o.height/2)/H*h*(10/12) + h/12, rr = o.width/W*w*1.3, c = dk ? P.glow : mixc(P.glow, WHITE, .75);
       const g = fx.createRadialGradient(cx, cy, 0, cx, cy, rr); g.addColorStop(0, rgba(c, dk ? .55 : .95)); g.addColorStop(.5, rgba(c, dk ? .2 : .5)); g.addColorStop(1, rgba(c, 0));
       fx.fillStyle = g; fx.fillRect(0, 0, w, h);
     }
-    // 3) floating soap bubbles
-    bx.setTransform(D,0,0,D,0,0); bx.clearRect(0, 0, W, H);
-    for(const b of bubbles){
-      b.y -= b.vy*dt*(RM ? 0 : 1 + .8*P.e);
-      if(b.y < -.12) spawn(b);
-      const x = (b.x + Math.sin(t*.45 + b.ph)*b.sw)*W, y = b.y*H, r = b.r, a = .35 + .55*b.z;
-      const c1 = mixc(pal[b.ci], WHITE, dk ? .15 : .1), c2 = mixc(pal[(b.ci + 3) % 6], WHITE, .2);
-      const g = bx.createRadialGradient(x - r*.3, y - r*.35, r*.05, x, y, r);
-      g.addColorStop(0, rgba(WHITE, .1*a)); g.addColorStop(.72, rgba(c1, .08*a)); g.addColorStop(.93, rgba(c1, .42*a)); g.addColorStop(1, rgba(c1, 0));
-      bx.fillStyle = g; bx.beginPath(); bx.arc(x, y, r, 0, TAU); bx.fill();
-      const lg = bx.createLinearGradient(x - r, y - r, x + r, y + r); lg.addColorStop(0, rgba(c2, .5*a)); lg.addColorStop(.5, rgba(c1, .12*a)); lg.addColorStop(1, rgba(c2, .4*a));
-      bx.strokeStyle = lg; bx.lineWidth = Math.max(.6, r*.035); bx.beginPath(); bx.arc(x, y, r*.97, 0, TAU); bx.stroke();
-      bx.fillStyle = rgba(WHITE, (dk ? .55 : .85)*a); bx.beginPath(); bx.ellipse(x - r*.38, y - r*.42, r*.2, r*.085, -.7, 0, TAU); bx.fill();
+    // 4) edge glow: colored light running around the screen edge, full strength while the agent works
+    const ew = ec.width, eh = ec.height, per = 2*(ew + eh), th = Math.min(ew, eh)*(working ? .085 : .06);
+    ex.setTransform(1,0,0,1,0,0); ex.globalCompositeOperation = 'source-over'; ex.clearRect(0, 0, ew, eh); ex.globalCompositeOperation = 'lighter';
+    for(let i = 0; i < 22; i++){ // many overlapping lights, so the edge reads as one band
+      let s = ((i/22 + t*.035) % 1)*per, px, py;
+      if(s < ew){ px = s; py = 0; } else if((s -= ew) < eh){ px = ew; py = s; } else if((s -= eh) < ew){ px = ew - s; py = eh; } else { px = 0; py = eh - (s - ew); }
+      const c = tone((i % 2 ? P.nxt : pal)[i % 6], .34, dk ? .6 : .62), rr = th*(2.1 + .6*Math.sin(t*1.3 + i*1.7)), g = ex.createRadialGradient(px, py, 0, px, py, rr);
+      g.addColorStop(0, rgba(c, .62)); g.addColorStop(.5, rgba(c, .22)); g.addColorStop(1, rgba(c, 0));
+      ex.fillStyle = g; ex.fillRect(px - rr, py - rr, 2*rr, 2*rr);
     }
   }
   requestAnimationFrame(frame);
@@ -882,7 +974,7 @@ function renderAccts(){
 }
 $('#accts').addEventListener('click', e => {
   const b = e.target.closest('.acct'); if(!b) return;
-  const a = ACCTS.find(x => x.key === b.dataset.k); a.on = !a.on; renderAccts();
+  const a = ACCTS.find(x => x.key === b.dataset.k); a.on = !a.on; renderAccts(); $(`.acct[data-k="${a.key}"]`).classList.add('pop');
 });
 renderAccts();
 
@@ -901,7 +993,6 @@ function submitAsk(){
   bigOrb.set('busy'); setTimeout(() => bigOrb.set('idle'), 900);
 }
 $('#goBtn').addEventListener('click', () => {
-  if(!LIVE && !QS.has('demo')){ toast('Not connected to a Meetble server yet'); return; } // real runs only; ?demo=1 plays the sample
   document.body.className = 's-run'; scrollTo(0,0); LIVE ? runLive() : run(); });
 
 /* ---------- live mode: served by server.mjs, runs the real pipeline. Opened as a file (or ?demo=1) it plays the sample run. ---------- */
@@ -1071,6 +1162,12 @@ function confirmBox(a){
 }
 const kindTag = a => `<span class="kind ${a.kind}">${a.kind === 'agent' ? 'Agent does it' : 'You go'}</span>`;
 
+let lastBig = 0;
+function countUp(node, to, from = 0){ // numbers count up instead of just appearing
+  if(!node || RM) return;
+  const t0 = performance.now();
+  (function step(now){ const k = Math.min(1, (now - t0)/700); node.textContent = num(from + (to - from)*(1 - (1 - k)**3)); if(k < 1) requestAnimationFrame(step); })(t0);
+}
 function renderActs(){
   const list = vis();
   if(cur >= list.length) cur = Math.max(0, list.length - 1);
@@ -1085,11 +1182,14 @@ function renderActs(){
       <div class="btns">${control(a)}</div>
       ${confirmBox(a)}
     </article>` : '<div class="wait-txt">No route for this way of meeting yet.</div>';
+  if(dir && a) countUp($('.dcard .pc')?.firstChild, pOf(a));
   dir = '';
   $('#dots').innerHTML = list.map((x,i) => `<button type="button" class="${i === cur ? 'on' : ''} ${status[x.id] ? 'done' : ''}" data-go="${i}" aria-label="Route ${i+1}"></button>`).join('');
   $('#prevBtn').disabled = cur <= 0; $('#nextBtn').disabled = cur >= list.length - 1;
   const doable = list.filter(x => !x.late), t = filter === 'all' && pTotal !== null ? pTotal : doable.length ? total(doable) : 0; // live: the Python total (deadline + budget)
   $('#big').innerHTML = doable.length ? `${num(t)}<sup>%</sup>` : '–';
+  if(doable.length && Math.abs(t - lastBig) > .0005) countUp($('#big').firstChild, t, lastBig);
+  lastBig = doable.length ? t : 0;
   $('#ringV').style.strokeDashoffset = 276.5 * (1 - t);
 }
 function go(i){
@@ -1168,7 +1268,7 @@ function tick(){ const s = Math.round((Date.now() - live.t0)/1000); $('#liveT').
 function liveStart(){ live.t0 = Date.now(); clearInterval(live.timer); live.timer = setInterval(tick, 1000); tick(); $('#live').classList.add('on'); }
 function liveStop(text){ clearInterval(live.timer); $('#live').classList.remove('on'); $('#liveNow').textContent = text; }
 $('#liveH').addEventListener('click', e => { const open = $('#liveB').hidden; $('#liveB').hidden = !open; e.currentTarget.setAttribute('aria-expanded', open); });
-$('#resetBtn').addEventListener('click', () => {
+$('#homeBtn').addEventListener('click', () => {
   clearInterval(live.timer); live.n = 0; $('#trail').innerHTML = ''; $('#live').classList.remove('on');
   $('#liveNow').textContent = 'Waiting to start'; $('#liveT').textContent = '0:00'; $('#liveUrl').textContent = 'about:blank'; $('#liveSite').textContent = '–';
 });
@@ -1340,7 +1440,8 @@ function buildActions(a1, a2, a3){
 }
 
 /* ---------- restart ---------- */
-$('#resetBtn').addEventListener('click', () => {
+$('#homeBtn').addEventListener('click', () => {
+  ACCTS.forEach(a => a.on = false); renderAccts();
   runId++; es?.close(); if(LIVE) fetch(q('/api/stop'), {method:'POST'}).catch(() => {}); $('#planSum').textContent = '';
   log.length = 0; actions = []; filter = 'all'; openConfirm = null; cur = 0;
   Object.keys(status).forEach(k => delete status[k]); Object.keys(groups).forEach(k => delete groups[k]);
