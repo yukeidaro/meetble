@@ -1187,13 +1187,14 @@ function onActions(ev){
 // A live card: research just found a path to the person. It joins the deck now; the final "actions" list re-ranks and replaces the deck.
 function onLiveAction(ev){
   const a = ev.action;
-  if(!a || actions.some(x => x.id === a.id)) return;
+  if(!a) return;
   const shown = vis()[cur];
-  actions.push(a);
+  const i = actions.findIndex(x => x.id === a.id); // same id: an upgraded card replaces the old one
+  if(i >= 0) actions[i] = a; else actions.push(a);
   actions.sort((x,y) => pOf(y) - pOf(x));
-  if(shown) cur = Math.max(0, vis().indexOf(shown)); // keep the card the person is looking at in front
+  if(shown) cur = Math.max(0, vis().findIndex(x => x.id === shown.id)); // keep the card the person is looking at in front
   $('#tabPlan').disabled = false; $('#planCnt').textContent = actions.length;
-  if(actions.length === 1) renderFilters();
+  if(actions.length === 1 && i < 0) renderFilters();
   renderActs();
 }
 function renderFilters(){

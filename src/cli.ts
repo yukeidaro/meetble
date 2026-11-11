@@ -36,10 +36,12 @@ const out = arg("out") ?? "out/research.json";
 const profilePath = arg("profile") ?? "user_profile.json";
 let offerInventory: unknown[] = [];
 let profileEvents: string[] = []; // user_profile.json my_events: [{url}] or [url]
+let affiliations: string[] = []; // user_profile.json affiliations: your schools, past companies, communities
 if (existsSync(profilePath)) {
   try {
     const p = JSON.parse(readFileSync(profilePath, "utf8").replace(/^\uFEFF/, "")); // strip BOM (Windows editors)
     offerInventory = Array.isArray(p.offer_inventory) ? p.offer_inventory : Array.isArray(p.offer_inventory_draft) ? p.offer_inventory_draft : [];
+    if (Array.isArray(p.affiliations)) affiliations = p.affiliations.filter((a: unknown): a is string => typeof a === "string");
     if (Array.isArray(p.my_events)) profileEvents = p.my_events.map((e: unknown) => (typeof e === "string" ? e : (e as { url?: unknown })?.url)).filter((u: unknown): u is string => typeof u === "string");
   } catch (e) {
     console.error(`Could not read ${profilePath}: ${(e as Error).message}`);
@@ -86,7 +88,7 @@ async function waitForLogin(c: LoginCheckResult): Promise<boolean> {
   return !skipLogin;
 }
 let skipLogin = false;
-const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls, waitForLogin,
+const result = await runResearch({ name, hint: arg("hint"), deadline, offerInventory, targetOverrides: { x_handle: xHandle }, eventUrls, affiliations, waitForLogin,
   // One line per live action card; server.mjs forwards each to the UI the moment it appears.
   // The nonce comes from server.mjs, so a checklist note can't pass itself off as a card.
   onAction: (a) => console.log(`ACTION${process.env.MEETBLE_ACTION_NONCE ? `:${process.env.MEETBLE_ACTION_NONCE}` : ""} ${JSON.stringify(a)}`) }, ctx);

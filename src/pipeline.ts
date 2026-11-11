@@ -17,6 +17,7 @@ import { recentXMentions, summarizeRecentXMentions } from "./tools/recent_x_ment
 import { find_events, summarizeFindEvents } from "./tools/find_events.js";
 import { loginCheck, lumaMyEvents, summarizeLoginCheck, summarizeLumaMyEvents, type LoginCheckResult } from "./tools/browser_session.js";
 import { probe_booking_page, summarizeProbeBookingPage } from "./tools/probe_booking_page.js";
+import { mutual_ties, shared_affiliations, summarizeMutualTies, summarizeSharedAffiliations } from "./tools/network_ties.js";
 import { RunBudget, withTimeout } from "./core/budget.js";
 import { LiveActions, type LiveAction } from "./leads.js";
 
@@ -27,6 +28,7 @@ export interface ResearchInput {
   offerInventory?: unknown[];       // from user_profile.json, passed through for Steps 3-5
   targetOverrides?: Partial<Target>; // e.g. known x_handle, to skip guessing
   eventUrls?: string[];             // events the user attends (CLI --event-url / profile my_events)
+  affiliations?: string[];          // your schools, past companies, communities (profile affiliations)
   /** Called when the pre-flight check finds sites signed out: ask the human to log in, resolve true to re-check. */
   waitForLogin?: (check: LoginCheckResult) => Promise<boolean>;
   /** Called as soon as a finding opens a path to the person (a live, provisional action card). */
@@ -40,6 +42,7 @@ const DIMENSION: Record<string, string> = {
   resolve_target: "web", find_x_handle: "x", search_web: "web", podcast_quotes: "podcast", find_precedents: "precedent",
   x_profile: "x", linkedin_profile: "linkedin", instagram_public: "instagram", guess_work_email: "email",
   recent_web_mentions: "mention", recent_x_mentions: "mention", find_events: "event", probe_booking_page: "booking",
+  mutual_ties: "network", shared_affiliations: "network",
 };
 
 export function dimensionOf(f: Finding): string {
@@ -61,7 +64,7 @@ export const STEP_CAP_MS: Record<string, number> = {
   login_check: 180_000, luma_my_events: 150_000, resolve_target: 60_000, find_x_handle: 60_000,
   search_web: 90_000, podcast_quotes: 90_000, find_precedents: 90_000, x_profile: 150_000, instagram_public: 90_000,
   guess_work_email: 90_000, linkedin_profile: 180_000, recent_web_mentions: 60_000, recent_x_mentions: 120_000,
-  find_events: 120_000, probe_booking_page: 60_000,
+  find_events: 120_000, probe_booking_page: 60_000, mutual_ties: 60_000, shared_affiliations: 60_000,
 };
 
 export function runBudgetMs(env: NodeJS.ProcessEnv = process.env): number {
@@ -144,8 +147,16 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
     if (!target.company && c) target.company = c;
   })).then(() => step("step1.guess_work_email", `Estimating ${first}'s work email${target.company ? ` (${target.company})` : ""}`, (c) => guess_work_email({ target }, c), summarizeGuessWorkEmail));
 
-  const [login, mine, web, pods, prec, xp, ig, email, li, webMentions, xMentions, events, booking] = await Promise.all([
-    loginP, mineP, webP, podsP, precP, xpP, igP, emailP, liP, webMentionsP, xMentionsP, eventsP, bookingP,
+  // Network (Phase 4): how each LinkedIn mutual knows them (needs the mutuals), and the background you share.
+  const tiesP = liP.then((li) => li?.data?.mutual_connections?.length
+    ? step("step2.mutual_ties", `Checking how your mutuals know ${first}`, (c) => mutual_ties({ target, mutuals: li.data!.mutual_connections! }, c), summarizeMutualTies)
+    : undefined);
+  const affP = input.affiliations?.length
+    ? step("step2.shared_affiliations", `Looking for background you share with ${first}`, (c) => shared_affiliations({ target, affiliations: input.affiliations! }, c), summarizeSharedAffiliations)
+    : Promise.resolve(undefined);
+
+  const [login, mine, web, pods, prec, xp, ig, email, li, webMentions, xMentions, events, booking, ties, shared] = await Promise.all([
+    loginP, mineP, webP, podsP, precP, xpP, igP, emailP, liP, webMentionsP, xMentionsP, eventsP, bookingP, tiesP, affP,
   ]);
 
   const findings = ctx.findings.all().map((f) => ({
@@ -172,6 +183,8 @@ export async function runResearch(input: ResearchInput, ctx: ToolContext) {
       linkedin: li?.data ?? null,
       logins: login?.sites ?? null,
       my_events: mine?.events ?? [],
+      mutual_ties: ties?.ties ?? [],
+      shared_affiliations: shared?.shared ?? [],
       instagram: ig ?? null,
       web: web ? { count: ctx.findings.byTool("search_web").length } : null,
       podcasts: pods ? { count: ctx.findings.byTool("podcast_quotes").length } : null,
